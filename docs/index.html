@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VCP">
+<title>VCP Screener</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-row">
+    <h1>VCP Screener</h1>
+    <button id="refresh" class="icon-btn" aria-label="Refresh">&#8635;</button>
+  </div>
+  <p id="status" class="status">Loading&hellip;</p>
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab is-active" data-tab="ready" role="tab">Ready <span class="tab-count" id="count-ready">0</span></button>
+    <button class="tab" data-tab="watch" role="tab">Watch <span class="tab-count" id="count-watch">0</span></button>
+    <button class="tab" data-tab="stage2" role="tab">Stage 2 <span class="tab-count" id="count-stage2">0</span></button>
+    <button class="tab" data-tab="starred" role="tab">&#9733; <span class="tab-count" id="count-starred">0</span></button>
+  </nav>
+  <div class="controls">
+    <input id="search" class="search" type="search" inputmode="search"
+           placeholder="Filter by symbol or name" autocomplete="off">
+    <select id="sort" class="sort" aria-label="Sort by">
+      <option value="score">Best setup</option>
+      <option value="risk">Lowest risk</option>
+      <option value="rr">Best reward:risk</option>
+      <option value="tight">Tightest final T</option>
+      <option value="near">Closest to pivot</option>
+      <option value="rs">Strongest vs market</option>
+      <option value="symbol">Symbol A-Z</option>
+    </select>
+  </div>
+</header>
+
+<main id="list" class="list" aria-live="polite"></main>
+
+<p id="empty" class="empty" hidden></p>
+
+<footer class="foot">
+  <span id="foot-note"></span>
+</footer>
+
+<!-- Detail sheet -->
+<section id="detail" class="sheet" hidden aria-modal="true" role="dialog">
+  <div class="sheet-head">
+    <button id="back" class="icon-btn" aria-label="Back">&#8592;</button>
+    <div class="sheet-title">
+      <strong id="d-symbol"></strong>
+      <span id="d-name"></span>
+    </div>
+    <button id="d-star" class="icon-btn" aria-label="Star">&#9734;</button>
+  </div>
+  <div class="sheet-body">
+    <div class="range-row" id="range-row">
+      <button class="range" data-bars="65">3M</button>
+      <button class="range is-active" data-bars="130">6M</button>
+      <button class="range" data-bars="260">1Y</button>
+    </div>
+    <div class="chart-wrap" id="chart-wrap">
+      <canvas id="chart"></canvas>
+      <div id="chart-legend" class="legend"></div>
+    </div>
+
+    <div class="plan" id="plan"></div>
+
+    <div class="calc" id="calc-card">
+      <h3>Position size</h3>
+      <div class="calc-row">
+        <label>Account $ <input id="acct" type="number" inputmode="decimal" value="10000" min="0"></label>
+        <label>Risk % <input id="riskpct" type="number" inputmode="decimal" value="1" min="0" step="0.25"></label>
+      </div>
+      <p id="calc-out" class="calc-out"></p>
+    </div>
+
+    <h3 class="sec">Contractions</h3>
+    <div id="d-contractions"></div>
+
+    <h3 class="sec">VCP rules</h3>
+    <div id="d-vcp"></div>
+
+    <h3 class="sec">Stage 2 template</h3>
+    <div id="d-stage2"></div>
+  </div>
+</section>
+
+<script src="chart.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

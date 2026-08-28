@@ -223,9 +223,16 @@ def main(argv: list[str] | None = None) -> int:
         df = store.load(row["symbol"], history_days)
         if df.empty:
             continue
+        payload_series = _series_payload(df, series_bars, cfg)
         (series_dir / f"{row['symbol']}.json").write_text(
-            json.dumps(_series_payload(df, series_bars, cfg), separators=(",", ":"))
+            json.dumps(payload_series, separators=(",", ":"))
         )
+        # Contraction indices are positions in the full history; the chart only
+        # receives the tail, so rebase them onto the series that ships with it.
+        offset = len(df) - len(payload_series["c"])
+        for c in row.get("vcp", {}).get("contractions", []):
+            c["high_idx"] -= offset
+            c["low_idx"] -= offset
         row["has_series"] = True
         written += 1
 

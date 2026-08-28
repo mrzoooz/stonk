@@ -13,7 +13,7 @@ import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -114,7 +114,7 @@ def fetch_yahoo(session: requests.Session, symbol: str, start: date, timeout: in
         return pd.DataFrame()
     frame = pd.DataFrame(
         {
-            "date": [datetime.utcfromtimestamp(t).strftime("%Y-%m-%d") for t in stamps],
+            "date": [datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d") for t in stamps],
             "open": quote.get("open"),
             "high": quote.get("high"),
             "low": quote.get("low"),
@@ -166,7 +166,7 @@ class PriceStore:
                 last = self.last_date(symbol)
             self.conn.execute(
                 "INSERT OR REPLACE INTO meta VALUES (?,?,?,?)",
-                (symbol, last, datetime.utcnow().isoformat(timespec="seconds"), status),
+                (symbol, last, datetime.now(timezone.utc).isoformat(timespec="seconds"), status),
             )
             self.conn.commit()
 

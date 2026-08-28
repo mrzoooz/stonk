@@ -1,0 +1,91 @@
+name: Nightly scan
+
+on:
+  schedule:
+    # 23:30 UTC Mon-Fri = 19:30 ET, a few hours after the US close so the
+    # daily bars have settled. GitHub only runs schedules on the DEFAULT
+    # branch - see README.
+    - cron: "30 23 * * 1-5"
+    # Morning safety net in case the evening run was dropped by the scheduler.
+    - cron: "30 11 * * 2-6"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Cap the universe (0 = full scan). Useful for a quick test."
+        required: false
+        default: "0"
+      force_full:
+        description: "Refetch full history instead of topping up the cache"
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The price cache makes a nightly run cheap: without it every symbol
+      # needs a full two-year backfill.
+      - name: Restore price cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: cache
+          key: prices-${{ github.run_id }}
+          restore-keys: |
+            prices-
+
+      - name: Run screen
+        run: |
+          python -m screener.run \
+            --limit "${{ github.event.inputs.limit || 0 }}" \
+            ${{ github.event.inputs.force_full == 'true' && '--force-full' || '' }}
+
+      - name: Save price cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: cache
+          key: prices-${{ github.run_id }}
+
+      - name: Summarise
+        if: always()
+        run: |
+          if [ -f docs/data/meta.json ]; then
+            {
+              echo '### Scan result'
+              echo '```json'
+              cat docs/data/meta.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}

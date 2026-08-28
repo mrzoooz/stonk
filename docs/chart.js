@@ -1,0 +1,186 @@
+/* Candle + volume + moving-average chart on a plain canvas.
+   No library: the whole app has to work offline from the service-worker cache,
+   and a phone renders a few hundred rects far faster than it parses a charting
+   bundle. */
+(function (global) {
+  'use strict';
+
+  var COLORS = {
+    up: '#22c55e', down: '#ef4444',
+    ma50: '#38bdf8', ma150: '#f59e0b', ma200: '#a78bfa',
+    pivot: '#e6edf3', support: '#ef4444',
+    grid: '#24303d', text: '#8b9bb0', volUp: '#1f6f3f', volDown: '#7f2b2b'
+  };
+
+  function niceTicks(min, max, count) {
+    var span = max - min;
+    if (!isFinite(span) || span <= 0) return [min];
+    var raw = span / count;
+    var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    var norm = raw / mag;
+    var step = (norm >= 5 ? 5 : norm >= 2 ? 2 : 1) * mag;
+    var out = [], v = Math.ceil(min / step) * step;
+    for (; v <= max + 1e-9; v += step) out.push(v);
+    return out;
+  }
+
+  function fmtPrice(v) {
+    if (v >= 1000) return v.toFixed(0);
+    if (v >= 100) return v.toFixed(1);
+    return v.toFixed(2);
+  }
+
+  /**
+   * @param canvas  target canvas element
+   * @param series  {d,o,h,l,c,v,ma50,ma150,ma200} arrays, oldest first
+   * @param opts    {bars, pivot, support, contractions}
+   */
+  function draw(canvas, series, opts) {
+    opts = opts || {};
+    var dpr = Math.min(global.devicePixelRatio || 1, 2);
+    var cssW = canvas.clientWidth || 320;
+    var cssH = canvas.clientHeight || 300;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+
+    var total = series.c.length;
+    var n = Math.min(opts.bars || total, total);
+    var from = total - n;
+
+    // Layout: price pane on top, volume pane beneath.
+    var padL = 6, padR = 46, padT = 8, padB = 18;
+    var volH = Math.round(cssH * 0.18);
+    var priceH = cssH - padT - padB - volH - 6;
+    var plotW = cssW - padL - padR;
+
+    var slice = function (arr) { return arr.slice(from); };
+    var highs = slice(series.h), lows = slice(series.l),
+        opens = slice(series.o), closes = slice(series.c), vols = slice(series.v);
+
+    var maKeys = ['ma50', 'ma150', 'ma200'].filter(function (k) { return series[k]; });
+    var mas = {};
+    maKeys.forEach(function (k) { mas[k] = slice(series[k]); });
+
+    var lo = Infinity, hi = -Infinity;
+    for (var i = 0; i < n; i++) {
+      if (lows[i] != null && lows[i] < lo) lo = lows[i];
+      if (highs[i] != null && highs[i] > hi) hi = highs[i];
+    }
+    maKeys.forEach(function (k) {
+      for (var j = 0; j < n; j++) {
+        var v = mas[k][j];
+        if (v == null) continue;
+        if (v < lo) lo = v; if (v > hi) hi = v;
+      }
+    });
+    [opts.pivot, opts.support].forEach(function (v) {
+      if (v == null) return;
+      if (v < lo) lo = v; if (v > hi) hi = v;
+    });
+    if (!isFinite(lo) || !isFinite(hi) || hi <= lo) { lo = 0; hi = 1; }
+    var pad = (hi - lo) * 0.06;
+    lo -= pad; hi += pad;
+
+    var y = function (p) { return padT + priceH - (p - lo) / (hi - lo) * priceH; };
+    var slot = plotW / n;
+    var bw = Math.max(1, Math.min(9, slot * 0.68));
+    var x = function (i) { return padL + slot * (i + 0.5); };
+
+    // --- grid + price axis
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textBaseline = 'middle';
+    niceTicks(lo, hi, 4).forEach(function (t) {
+      var yy = Math.round(y(t)) + 0.5;
+      ctx.strokeStyle = COLORS.grid; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
+      ctx.fillStyle = COLORS.text; ctx.textAlign = 'left';
+      ctx.fillText(fmtPrice(t), padL + plotW + 5, yy);
+    });
+
+    // --- shade each contraction so the tightening is visible at a glance
+    (opts.contractions || []).forEach(function (c, idx) {
+      var a = c.high_idx - from, b = c.low_idx - from;
+      if (b < 0 || a > n) return;
+      a = Math.max(a, 0); b = Math.min(b, n - 1);
+      var x0 = padL + slot * a, x1 = padL + slot * (b + 1);
+      ctx.fillStyle = 'rgba(56,189,248,' + (0.05 + idx * 0.025) + ')';
+      ctx.fillRect(x0, padT, Math.max(x1 - x0, 1), priceH);
+      ctx.fillStyle = COLORS.text; ctx.font = '9px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('T' + c.index, (x0 + x1) / 2, padT + 8);
+      ctx.font = '10px -apple-system, sans-serif';
+    });
+
+    // --- volume pane
+    var vMax = 0;
+    for (var k = 0; k < n; k++) if (vols[k] > vMax) vMax = vols[k];
+    var volTop = padT + priceH + 6;
+    for (var m = 0; m < n; m++) {
+      var vh = vMax ? (vols[m] / vMax) * volH : 0;
+      ctx.fillStyle = closes[m] >= opens[m] ? COLORS.volUp : COLORS.volDown;
+      ctx.fillRect(x(m) - bw / 2, volTop + volH - vh, bw, Math.max(vh, 0.5));
+    }
+
+    // --- candles
+    for (var q = 0; q < n; q++) {
+      var up = closes[q] >= opens[q];
+      ctx.strokeStyle = ctx.fillStyle = up ? COLORS.up : COLORS.down;
+      var cx = Math.round(x(q)) + 0.5;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx, y(highs[q])); ctx.lineTo(cx, y(lows[q])); ctx.stroke();
+      var yo = y(opens[q]), yc = y(closes[q]);
+      var top = Math.min(yo, yc), h = Math.max(Math.abs(yc - yo), 1);
+      ctx.fillRect(cx - bw / 2, top, bw, h);
+    }
+
+    // --- moving averages
+    maKeys.forEach(function (key) {
+      ctx.strokeStyle = COLORS[key]; ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      var started = false;
+      for (var i2 = 0; i2 < n; i2++) {
+        var v2 = mas[key][i2];
+        if (v2 == null) { started = false; continue; }
+        var px = x(i2), py = y(v2);
+        if (started) ctx.lineTo(px, py); else { ctx.moveTo(px, py); started = true; }
+      }
+      ctx.stroke();
+    });
+
+    // --- pivot and support lines
+    function level(value, color, label) {
+      if (value == null) return;
+      var yy = Math.round(y(value)) + 0.5;
+      ctx.save();
+      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
+      ctx.restore();
+      // Chip behind the label so it stays readable over candles.
+      ctx.font = '9px -apple-system, sans-serif';
+      var tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(11,15,20,.82)';
+      ctx.fillRect(padL + 1, yy - 12, tw + 8, 11);
+      ctx.fillStyle = color; ctx.textAlign = 'left';
+      ctx.fillText(label, padL + 5, yy - 6.5);
+      ctx.font = '10px -apple-system, sans-serif';
+    }
+    level(opts.pivot, COLORS.pivot, 'PIVOT ' + fmtPrice(opts.pivot || 0));
+    level(opts.support, COLORS.support, 'STOP ' + fmtPrice(opts.support || 0));
+
+    // --- date axis: first, middle, last
+    ctx.fillStyle = COLORS.text; ctx.font = '9px -apple-system, sans-serif';
+    var dates = series.d.slice(from);
+    [[0, 'left'], [Math.floor(n / 2), 'center'], [n - 1, 'right']].forEach(function (p) {
+      var i3 = p[0];
+      if (!dates[i3]) return;
+      ctx.textAlign = p[1];
+      var xx = p[1] === 'left' ? padL : p[1] === 'right' ? padL + plotW : padL + plotW / 2;
+      ctx.fillText(dates[i3].slice(2), xx, cssH - 7);
+    });
+  }
+
+  global.VCPChart = { draw: draw, COLORS: COLORS };
+})(window);
