@@ -1,0 +1,132 @@
+# ---------------------------------------------------------------------------
+# Stage 2 + VCP screener configuration.
+# Every threshold the screener uses lives here; nothing is hard-coded.
+# ---------------------------------------------------------------------------
+
+universe:
+  # Which listing venues to keep. Matches the exchange codes in the
+  # nasdaqtrader.com symbol directory files.
+  exchanges: [NASDAQ, NYSE, NYSE MKT, NYSE ARCA, BATS, IEX]
+  exclude_etfs: true
+  exclude_test_issues: true
+  # Drop obvious non-common-stock instruments (warrants, units, rights, prefs).
+  exclude_suffixed: true
+  min_price: 5.0
+  # A symbol needs at least this many daily bars to be evaluated at all
+  # (200MA + 20-day slope lookback + slack).
+  min_history_days: 260
+  # Cap the universe for debugging. 0 = no cap.
+  limit: 0
+
+data:
+  # Calendar days of history to keep per symbol.
+  history_days: 800
+  benchmark: SPY
+  providers: [stooq, yahoo]     # tried in order, per symbol
+  max_workers: 8
+  request_timeout: 20
+  retries: 3
+
+# ---------------------------------------------------------------------------
+# Stage 2 trend template (criteria 1-5 from the brief, plus the TradingView
+# filters 1-6 that reproduce the manual screen).
+# ---------------------------------------------------------------------------
+stage2:
+  ma_short: 50
+  ma_mid: 150
+  ma_long: 200
+
+  # Criterion 2: both the 150MA and the 200MA must be sloping up. Measured as
+  # "the MA today is above the MA this many trading days ago".
+  slope_lookback_days: 20
+  # Require a minimum slope, in percent, over that lookback. 0 = any rise.
+  min_slope_pct: 0.0
+
+  # Criterion 5 / weekly candles: count green vs red weeks over this window.
+  weekly_lookback_weeks: 52
+  # Green week = weekly close > weekly open.
+  require_more_up_weeks: true
+
+  # TradingView filter 6.
+  beta:
+    lookback_days: 252
+    min_beta: 1.0
+
+  # TradingView filter 5: monthly volume x price.
+  liquidity:
+    dollar_volume_days: 21
+    aggregate: sum              # sum | mean
+    min_dollar_volume: 900000000
+
+  # TradingView filter 4. 0 disables the market-cap floor (dollar volume is
+  # doing the work instead).
+  min_market_cap: 0
+
+# ---------------------------------------------------------------------------
+# VCP: a run of consolidations, each tighter than the last, on falling volume.
+# ---------------------------------------------------------------------------
+vcp:
+  # How far back to look for the base.
+  base_lookback_days: 130
+
+  # Swing detection. A swing is confirmed once price reverses this far off an
+  # extreme, and swings must be at least min_swing_bars apart.
+  zigzag_pct: 3.0
+  min_swing_bars: 3
+
+  min_contractions: 2
+  max_contractions: 6
+
+  # Each contraction must be at most this fraction of the previous one's depth.
+  # 1.0 = "merely narrower"; 0.85 = "meaningfully narrower".
+  contraction_shrink_factor: 0.85
+
+  # "Price never goes below B again" - each consolidation low must sit at or
+  # above the previous one.
+  require_higher_lows: true
+  higher_low_tolerance_pct: 0.5
+
+  # T1 is allowed to be deep, the final T must be tight (the ~4-8% pivot zone,
+  # widened slightly so real setups are not lost on rounding).
+  max_first_depth_pct: 35.0
+  final_depth_min_pct: 2.0
+  final_depth_max_pct: 12.0
+
+  # Volume must fall from one contraction to the next (high -> medium -> low).
+  require_volume_contraction: true
+  volume_shrink_factor: 1.0
+
+  # Volume dry-up right before the breakout: 5-day average volume relative to
+  # the 50-day average.
+  dryup_days: 5
+  dryup_ratio: 0.85
+
+  # The final low has to hold for a few bars before the consolidation counts
+  # as finished.
+  min_bars_since_final_low: 3
+
+  # Only report names still near their pivot.
+  max_distance_below_pivot_pct: 15.0
+  # Once price is this far above the pivot the entry is gone - the name is
+  # extended, not actionable.
+  max_extended_above_pivot_pct: 5.0
+  # A breakout counts when price clears the pivot on this multiple of the
+  # 50-day average volume.
+  breakout_volume_multiple: 1.5
+
+# ---------------------------------------------------------------------------
+# Risk / reward.
+# ---------------------------------------------------------------------------
+risk:
+  # Risk = (pivot - support) / pivot. This is the hard 5% ceiling.
+  max_risk_pct: 5.0
+  # Reward target: measured move = pivot + (base high - base low).
+  target_method: measured_move
+  min_reward_risk: 3.0
+
+output:
+  # Series data (for the charts) is written for at most this many names.
+  max_series: 400
+  series_bars: 260
+  # Names that pass Stage 2 but have no valid VCP are still listed, capped here.
+  max_stage2_only: 600
