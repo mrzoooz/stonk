@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VCP Screener - Pages misconfigured</title>
+<style>
+  body { margin:0; background:#0b0f14; color:#e6edf3; min-height:100vh;
+         display:grid; place-items:center; padding:24px;
+         font:15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width:520px; }
+  h1 { font-size:19px; margin:0 0 14px; }
+  code { background:#1a232e; padding:2px 6px; border-radius:5px; font-size:13px; }
+  ol { padding-left:20px; } li { margin:9px 0; }
+  .note { color:#8b9bb0; font-size:13px; margin-top:20px; }
+  a { color:#38bdf8; }
+</style>
+<main>
+  <h1>GitHub Pages is serving the wrong source</h1>
+  <p>You are seeing this page (or the README) because Pages is building from a
+     <strong>branch</strong>. The screener is published by the
+     <em>Nightly scan</em> workflow instead, so a branch build shows the repo
+     root rather than the app.</p>
+  <ol>
+    <li>Open <strong>Settings &rarr; Pages</strong></li>
+    <li>Under <strong>Source</strong>, choose <code>GitHub Actions</code>
+        (not &ldquo;Deploy from a branch&rdquo;)</li>
+    <li>Re-run <strong>Actions &rarr; Nightly scan</strong>, then reload this URL</li>
+  </ol>
+  <p class="note">This file is never served when Pages is configured correctly:
+     the workflow publishes only the <code>docs/</code> directory, so the app's
+     own page replaces it.</p>
+</main>
