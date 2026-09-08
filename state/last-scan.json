@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-09-08T06:51:53+00:00",
+  "as_of": null,
+  "counts": {
+    "ready": 0,
+    "watch": 0,
+    "stage2": 0,
+    "errors": 0
+  },
+  "elapsed_sec": 7.9
+}
