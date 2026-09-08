@@ -53,6 +53,18 @@ storage, polling only the 10–40 names on the list. Ask and it can be added.
 Keep the repository **public** — public repos get unlimited GitHub Actions
 minutes, so the whole thing stays free.
 
+### Why this stays running
+
+GitHub disables scheduled workflows after **60 days of repository inactivity**,
+and Pages here is deployed from an artifact rather than a commit — so the
+nightly runs would otherwise leave no trace in the repo and the schedule would
+switch itself off after about two months, silently. Each run therefore records
+its result to `state/last-scan.json` and commits it. That both keeps the cron
+alive and gives you a history of when the scan last ran and what it found.
+
+If you ever see the app's date going stale, check Actions first: GitHub emails
+the repo owner before disabling a schedule, and re-enabling is one click.
+
 ---
 
 ## What the screen actually checks

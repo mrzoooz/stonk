@@ -25,7 +25,9 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  # contents: write is needed only for the heartbeat commit below, which keeps
+  # the cron schedule from being auto-disabled.
+  contents: write
   pages: write
   id-token: write
 
@@ -66,6 +68,30 @@ jobs:
         with:
           path: cache
           key: prices-${{ github.run_id }}
+
+      # GitHub disables scheduled workflows after 60 days of repository
+      # inactivity, and deploying Pages from an artifact leaves no commits
+      # behind. Recording each scan's result keeps the repo active, so the
+      # schedule stays alive, and gives a history of what ran when.
+      - name: Record scan result
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          [ -f docs/data/meta.json ] || exit 0
+          mkdir -p state
+          cp docs/data/meta.json state/last-scan.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/last-scan.json
+          if git diff --cached --quiet; then
+            echo "no change to record"
+            exit 0
+          fi
+          git commit -m "Record scan $(date -u +%Y-%m-%d)"
+          # Another run may have landed first; rebase rather than fail the scan.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Summarise
         if: always()
