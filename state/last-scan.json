@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-08T07:40:44+00:00",
+  "generated_at": "2026-09-08T15:48:40+00:00",
   "as_of": "2026-09-04",
   "counts": {
     "ready": 4,
@@ -7,5 +7,5 @@
     "stage2": 31,
     "errors": 0
   },
-  "elapsed_sec": 2176.1
+  "elapsed_sec": 2118.4
 }
