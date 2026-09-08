@@ -93,6 +93,15 @@ jobs:
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
+      # Lets the deploy-only workflow republish the latest results without
+      # re-running a scan.
+      - name: Cache scan output
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: docs/data
+          key: scan-output-${{ github.run_id }}
+
       - name: Summarise
         if: always()
         run: |
