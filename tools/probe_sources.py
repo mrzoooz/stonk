@@ -78,6 +78,34 @@ def main() -> None:
     show("10. tiingo, no key (expect 401 - proves reachability)",
          lambda: get("https://api.tiingo.com/tiingo/daily/aapl/prices"))
 
+    # --- round 2: is there ANY keyless source that works from here? --------
+
+    show("11. stooq.pl (different domain, maybe no browser challenge)",
+         lambda: get("https://stooq.pl/q/d/l/?s=aapl.us&i=d"))
+
+    show("12. nasdaq.com historical JSON (same operator as the working control)",
+         lambda: get("https://api.nasdaq.com/api/quote/AAPL/historical"
+                     "?assetclass=stocks&fromdate=2025-09-01&todate=2026-09-08&limit=9999"))
+
+    show("13. alphavantage demo key",
+         lambda: get("https://www.alphavantage.co/query"
+                     "?function=TIME_SERIES_DAILY&symbol=IBM&apikey=demo"))
+
+    show("14. twelvedata demo",
+         lambda: get("https://api.twelvedata.com/time_series"
+                     "?symbol=AAPL&interval=1day&outputsize=5&apikey=demo"))
+
+    show("15. eodhd demo token",
+         lambda: get("https://eodhd.com/api/eod/AAPL.US?api_token=demo&fmt=json"))
+
+    # The prize: one request returns every US ticker's bar for a whole day, so
+    # a nightly update is a single call and a backfill is one call per session.
+    show("16. polygon grouped daily, no key (expect 401 - proves reachability)",
+         lambda: get("https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2026-09-04"))
+
+    show("17. stockanalysis.com",
+         lambda: get("https://stockanalysis.com/api/symbol/s/AAPL/history"))
+
 
 if __name__ == "__main__":
     main()
