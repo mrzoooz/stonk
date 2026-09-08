@@ -100,7 +100,7 @@
     var from = total - n;
 
     // Layout: price pane on top, volume pane beneath.
-    var padL = 6, padR = 46, padT = 8, padB = 18;
+    var padL = 6, padR = 46, padT = 10, padB = 18;
     var volH = Math.round(cssH * 0.18);
     var priceH = cssH - padT - padB - volH - 6;
     var plotW = cssW - padL - padR;
@@ -157,9 +157,18 @@
       var x0 = padL + slot * a, x1 = padL + slot * (b + 1);
       ctx.fillStyle = 'rgba(56,189,248,' + (0.05 + idx * 0.025) + ')';
       ctx.fillRect(x0, padT, Math.max(x1 - x0, 1), priceH);
-      ctx.fillStyle = COLORS.text; ctx.font = '9px -apple-system, sans-serif';
+      // Label each consolidation with its number and how deep it was - the
+      // shrinking sequence is the whole point of the pattern.
+      var mid = (x0 + x1) / 2;
       ctx.textAlign = 'center';
-      ctx.fillText('T' + c.index, (x0 + x1) / 2, padT + 8);
+      ctx.fillStyle = COLORS.text;
+      ctx.font = 'bold 10px -apple-system, sans-serif';
+      ctx.fillText('T' + c.index, mid, padT + 9);
+      if (c.depth_pct != null) {
+        ctx.fillStyle = COLORS.up;
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.fillText(c.depth_pct.toFixed(1) + '%', mid, padT + 21);
+      }
       ctx.font = '10px -apple-system, sans-serif';
     });
 

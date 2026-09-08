@@ -61,22 +61,33 @@
     <button id="d-star" class="icon-btn" aria-label="Star">&#9734;</button>
   </div>
   <div class="sheet-body">
-    <div class="chart-controls" id="chart-controls">
-      <div class="range-row" id="range-row" role="group" aria-label="Range">
-        <button class="range" data-months="3">3M</button>
-        <button class="range is-active" data-months="6">6M</button>
-        <button class="range" data-months="12">1Y</button>
-        <button class="range" data-months="24">2Y</button>
+    <section class="chart-panel" id="chart-panel">
+      <div class="chart-head">
+        <button class="chart-collapse" id="chart-collapse" aria-expanded="true"
+                aria-controls="chart-body">
+          <span class="chev" aria-hidden="true">&#9662;</span> Chart
+        </button>
+        <button class="icon-btn small" id="chart-expand" aria-label="Expand chart">&#9974;</button>
       </div>
-      <div class="range-row" id="interval-row" role="group" aria-label="Candle interval">
-        <button class="range is-active" data-interval="daily">Daily</button>
-        <button class="range" data-interval="weekly">Weekly</button>
+      <div class="chart-body" id="chart-body">
+        <div class="chart-controls" id="chart-controls">
+          <div class="range-row" id="range-row" role="group" aria-label="Range">
+            <button class="range" data-months="3">3M</button>
+            <button class="range is-active" data-months="6">6M</button>
+            <button class="range" data-months="12">1Y</button>
+            <button class="range" data-months="24">2Y</button>
+          </div>
+          <div class="range-row" id="interval-row" role="group" aria-label="Candle interval">
+            <button class="range is-active" data-interval="daily">Daily</button>
+            <button class="range" data-interval="weekly">Weekly</button>
+          </div>
+        </div>
+        <div class="chart-wrap" id="chart-wrap">
+          <canvas id="chart"></canvas>
+          <div id="chart-legend" class="legend"></div>
+        </div>
       </div>
-    </div>
-    <div class="chart-wrap" id="chart-wrap">
-      <canvas id="chart"></canvas>
-      <div id="chart-legend" class="legend"></div>
-    </div>
+    </section>
 
     <div class="plan" id="plan"></div>
 

@@ -16,7 +16,9 @@
     starred: loadStars(),
     current: null,
     months: 6,
-    interval: 'daily'
+    interval: 'daily',
+    collapsed: false,
+    expanded: false
   };
 
   // Roughly how many bars make up a month at each interval.
@@ -26,7 +28,8 @@
   ['status', 'list', 'empty', 'tabs', 'search', 'sort', 'refresh', 'detail', 'back',
    'd-symbol', 'd-name', 'd-star', 'chart', 'chart-legend', 'plan', 'd-contractions',
    'd-vcp', 'd-stage2', 'acct', 'riskpct', 'calc-out', 'foot-note', 'range-row',
-   'chart-wrap', 'calc-card', 'interval-row', 'chart-controls'
+   'chart-wrap', 'calc-card', 'interval-row', 'chart-controls',
+   'chart-panel', 'chart-collapse', 'chart-expand', 'chart-body'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // ------------------------------------------------------------- storage
@@ -229,8 +232,7 @@
     // A name with no stored series (Stage 2 only) gets no chart and no
     // position-size box - there is no pivot to size against.
     var hasPivot = !!(row.vcp && row.vcp.metrics && row.vcp.metrics.pivot != null);
-    el['chart-wrap'].hidden = !row.has_series;
-    el['chart-controls'].hidden = !row.has_series;
+    el['chart-panel'].hidden = !row.has_series;
     el['calc-card'].hidden = !hasPivot;
 
     if (row.has_series) {
@@ -283,6 +285,35 @@
       legendItem(VCPChart.COLORS.pivot, 'Pivot') +
       legendItem(VCPChart.COLORS.support, 'Stop');
   }
+  function setCollapsed(on) {
+    state.collapsed = on;
+    el['chart-panel'].classList.toggle('is-collapsed', on);
+    el['chart-collapse'].setAttribute('aria-expanded', String(!on));
+    if (on && state.expanded) setExpanded(false);
+    saveChartPrefs();
+    if (!on) drawChart();
+  }
+
+  function setExpanded(on) {
+    state.expanded = on;
+    el['chart-panel'].classList.toggle('is-expanded', on);
+    // Stop the page behind the overlay from scrolling under a finger.
+    document.body.style.overflow = on || state.current ? 'hidden' : '';
+    el['chart-expand'].innerHTML = on ? '&times;' : '&#9974;';
+    el['chart-expand'].setAttribute('aria-label', on ? 'Close expanded chart' : 'Expand chart');
+    // The canvas is sized from its box, so it has to be redrawn after the
+    // layout changes rather than scaled.
+    requestAnimationFrame(drawChart);
+  }
+
+  function saveChartPrefs() {
+    try {
+      localStorage.setItem(CHART_KEY, JSON.stringify({
+        months: state.months, interval: state.interval, collapsed: state.collapsed
+      }));
+    } catch (e) {}
+  }
+
   function legendItem(color, label) {
     return '<span><i style="background:' + color + '"></i>' + label + '</span>';
   }
@@ -399,6 +430,7 @@
   }
 
   function closeDetail() {
+    if (state.expanded) setExpanded(false);
     el.detail.hidden = true;
     state.current = null;
     document.body.style.overflow = '';
@@ -475,19 +507,23 @@
       Array.prototype.forEach.call(el[row].children, function (x) {
         x.classList.toggle('is-active', x === b);
       });
-      try { localStorage.setItem(CHART_KEY, JSON.stringify(
-        { months: state.months, interval: state.interval })); } catch (err) {}
+      saveChartPrefs();
       drawChart();
     });
   }
   wireChartControls('range-row', 'months', function (b) { return parseFloat(b.dataset.months); });
   wireChartControls('interval-row', 'interval', function (b) { return b.dataset.interval; });
+  el['chart-collapse'].addEventListener('click', function () { setCollapsed(!state.collapsed); });
+  el['chart-expand'].addEventListener('click', function () { setExpanded(!state.expanded); });
+
   [el.acct, el.riskpct].forEach(function (input) {
     input.addEventListener('input', updateCalc);
   });
   window.addEventListener('resize', function () { if (state.current) drawChart(); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !el.detail.hidden) closeDetail();
+    if (e.key !== 'Escape') return;
+    if (state.expanded) setExpanded(false);
+    else if (!el.detail.hidden) closeDetail();
   });
 
   try {
@@ -502,6 +538,11 @@
       if (chartPref.interval) state.interval = chartPref.interval;
       markActive('range-row', 'months', String(state.months));
       markActive('interval-row', 'interval', state.interval);
+      if (chartPref.collapsed) {
+        state.collapsed = true;
+        el['chart-panel'].classList.add('is-collapsed');
+        el['chart-collapse'].setAttribute('aria-expanded', 'false');
+      }
     }
   } catch (e) {}
 

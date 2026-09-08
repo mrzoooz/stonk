@@ -163,7 +163,13 @@ Each detail page carries the chart (candles, 50/150/200MAs, shaded T cycles,
 pivot and stop lines), the trade plan, a position-size calculator, the
 contraction table, and the full pass/fail checklist for both engines.
 
-The chart has two independent controls: **range** (3M / 6M / 1Y / 2Y) and
+The chart can be **expanded** to fill the screen in place (no new tab, no
+navigation - Escape or the close button returns you) and **collapsed** out of
+the way when you want the numbers below it. Each consolidation band is labelled
+with its depth, so the shrinking T1 -> T2 -> T3 sequence is readable without
+cross-referencing the table.
+
+It has two independent controls: **range** (3M / 6M / 1Y / 2Y) and
 **interval** (daily or weekly candles). Weekly is the view criterion 5 is
 judged on - green weeks against red weeks - and it fits a whole base on a phone
 screen. Weekly candles are aggregated in the browser from the same daily bars,

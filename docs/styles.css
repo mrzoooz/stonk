@@ -128,6 +128,28 @@ h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppe
 .sheet-title span { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px var(--pad) calc(var(--safe-bottom) + 40px); }
 
+.chart-panel { margin-bottom: 12px; }
+.chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.chart-collapse {
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  font: 600 12px/1 -apple-system, sans-serif; letter-spacing: .6px;
+  text-transform: uppercase; padding: 6px 2px; display: flex; align-items: center; gap: 6px;
+}
+.chart-collapse .chev { transition: transform .15s ease; font-size: 11px; }
+.chart-panel.is-collapsed .chart-collapse .chev { transform: rotate(-90deg); }
+.chart-panel.is-collapsed .chart-body { display: none; }
+.icon-btn.small { width: 32px; height: 32px; font-size: 15px; }
+
+/* Expanded: fill the viewport in place, no new tab, no navigation. */
+.chart-panel.is-expanded {
+  position: fixed; inset: 0; z-index: 60; margin: 0;
+  background: var(--bg); display: flex; flex-direction: column;
+  padding: calc(var(--safe-top) + 10px) var(--pad) calc(var(--safe-bottom) + 10px);
+}
+.chart-panel.is-expanded .chart-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.chart-panel.is-expanded .chart-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.chart-panel.is-expanded #chart { flex: 1; height: auto; min-height: 0; }
+
 .chart-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;
                   align-items: center; justify-content: space-between; }
 .range-row { display: flex; gap: 6px; }
