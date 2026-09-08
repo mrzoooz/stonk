@@ -16,3 +16,5 @@ jobs:
           python-version: "3.12"
       - run: pip install requests
       - run: python tools/probe_sources.py
+      - run: python tools/probe_candidates.py
+        if: always()
