@@ -49,7 +49,9 @@ def sa_rows(sym: str, period: str = ""):
     if r.status_code != 200:
         return None, f"HTTP {r.status_code}"
     d = r.json()
-    rows = ((d.get("data") or {}).get("data")) or []
+    node = d.get("data")
+    rows = node.get("data") if isinstance(node, dict) else node
+    rows = rows if isinstance(rows, list) else []
     return rows, f"{len(rows)} rows"
 
 

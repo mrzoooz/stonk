@@ -6,8 +6,6 @@ missing; a full backfill happens once, or whenever the CI cache is evicted.
 """
 from __future__ import annotations
 
-import csv
-import io
 import logging
 import sqlite3
 import threading
@@ -48,84 +46,121 @@ class RateLimited(Exception):
 
 # --------------------------------------------------------------------------
 # Providers
+#
+# Both keyless sources that survive a datacenter IP are used here. Stooq and
+# Yahoo were tried first and are not viable from CI: Stooq answers every
+# request with a JavaScript browser challenge (on .com and .pl alike) and
+# Yahoo returns 429 for GitHub's IP ranges regardless of headers or cookies.
 # --------------------------------------------------------------------------
-def _stooq_symbol(symbol: str) -> str:
-    return symbol.replace(".", "-").replace("/", "-").lower() + ".us"
+def _clean_number(value: str) -> float:
+    """Turn Nasdaq's display strings ('$319.97', '39,606,880') into floats."""
+    if value is None:
+        raise ValueError("missing")
+    text = str(value).strip().replace("$", "").replace(",", "")
+    if not text or text.upper() in {"N/A", "--"}:
+        raise ValueError(f"not a number: {value!r}")
+    return float(text)
 
 
-def fetch_stooq(session: requests.Session, symbol: str, start: date, timeout: int) -> pd.DataFrame:
+def _nasdaq_request(
+    session: requests.Session, symbol: str, start: date, asset_class: str, timeout: int
+) -> list[dict]:
     url = (
-        "https://stooq.com/q/d/l/?s="
-        f"{_stooq_symbol(symbol)}&d1={start:%Y%m%d}&d2={date.today():%Y%m%d}&i=d"
+        f"https://api.nasdaq.com/api/quote/{symbol}/historical"
+        f"?assetclass={asset_class}&fromdate={start:%Y-%m-%d}"
+        f"&todate={date.today():%Y-%m-%d}&limit=99999"
     )
-    resp = session.get(url, timeout=timeout, headers={"User-Agent": UA})
+    resp = session.get(
+        url, timeout=timeout, headers={"User-Agent": UA, "Accept": "application/json"}
+    )
+    if resp.status_code == 404:
+        return []
+    if resp.status_code in (429, 403):
+        raise RateLimited(f"nasdaq {resp.status_code}")
     resp.raise_for_status()
-    text = resp.text.strip()
-    if not text or text.lower().startswith("no data"):
+    payload = resp.json()
+    node = payload.get("data") or {}
+    table = node.get("tradesTable") or {}
+    return table.get("rows") or []
+
+
+def fetch_nasdaq(
+    session: requests.Session, symbol: str, start: date, timeout: int
+) -> pd.DataFrame:
+    """Daily bars from Nasdaq's public quote API.
+
+    The endpoint splits its universe by asset class and returns an empty table
+    rather than an error for the wrong one, so an empty result is retried as an
+    ETF. That is what the SPY benchmark needs.
+    """
+    rows = _nasdaq_request(session, symbol, start, "stocks", timeout)
+    if not rows:
+        rows = _nasdaq_request(session, symbol, start, "etf", timeout)
+    return _nasdaq_frame(rows)
+
+
+def _nasdaq_frame(rows: list[dict]) -> pd.DataFrame:
+    recs = []
+    for row in rows:
+        try:
+            month, day, year = str(row["date"]).split("/")
+            recs.append(
+                {
+                    "date": f"{year}-{month}-{day}",
+                    "open": _clean_number(row.get("open")),
+                    "high": _clean_number(row.get("high")),
+                    "low": _clean_number(row.get("low")),
+                    "close": _clean_number(row.get("close")),
+                    "volume": _clean_number(row.get("volume")),
+                }
+            )
+        except (ValueError, KeyError, TypeError):
+            # A single unparseable session must not lose the whole symbol.
+            continue
+    if not recs:
         return pd.DataFrame()
-    if "exceeded" in text[:200].lower():
-        raise RateLimited("stooq daily hits limit")
-    rows = list(csv.DictReader(io.StringIO(text)))
-    if not rows or "Close" not in rows[0]:
+    # Nasdaq returns newest first; the rest of the screener expects ascending.
+    return pd.DataFrame(recs).iloc[::-1].reset_index(drop=True)
+
+
+def fetch_stockanalysis(
+    session: requests.Session, symbol: str, start: date, timeout: int
+) -> pd.DataFrame:
+    """Fallback source. Its default window is about six months, which is not
+    enough to seed a 200-day average but is ample for a nightly top-up."""
+    url = f"https://stockanalysis.com/api/symbol/s/{symbol.lower()}/history"
+    resp = session.get(url, timeout=timeout, headers={"User-Agent": UA, "Accept": "application/json"})
+    if resp.status_code == 404:
+        return pd.DataFrame()
+    if resp.status_code in (429, 403):
+        raise RateLimited(f"stockanalysis {resp.status_code}")
+    resp.raise_for_status()
+    node = resp.json().get("data")
+    rows = node.get("data") if isinstance(node, dict) else node
+    if not isinstance(rows, list):
         return pd.DataFrame()
     recs = []
-    for r in rows:
+    for row in rows:
         try:
             recs.append(
                 {
-                    "date": r["Date"],
-                    "open": float(r["Open"]),
-                    "high": float(r["High"]),
-                    "low": float(r["Low"]),
-                    "close": float(r["Close"]),
-                    "volume": float(r.get("Volume") or 0),
+                    "date": str(row["t"]),
+                    "open": float(row["o"]),
+                    "high": float(row["h"]),
+                    "low": float(row["l"]),
+                    "close": float(row["c"]),
+                    "volume": float(row.get("v") or 0),
                 }
             )
         except (ValueError, KeyError, TypeError):
             continue
-    return pd.DataFrame(recs)
-
-
-def _yahoo_symbol(symbol: str) -> str:
-    return symbol.replace(".", "-").upper()
-
-
-def fetch_yahoo(session: requests.Session, symbol: str, start: date, timeout: int) -> pd.DataFrame:
-    period1 = int(datetime.combine(start, datetime.min.time()).timestamp())
-    period2 = int(time.time()) + 86400
-    url = (
-        f"https://query1.finance.yahoo.com/v8/finance/chart/{_yahoo_symbol(symbol)}"
-        f"?period1={period1}&period2={period2}&interval=1d&events=div%2Csplit"
-    )
-    resp = session.get(url, timeout=timeout, headers={"User-Agent": UA})
-    if resp.status_code in (429, 999):
-        raise RateLimited(f"yahoo {resp.status_code}")
-    if resp.status_code == 404:
+    if not recs:
         return pd.DataFrame()
-    resp.raise_for_status()
-    payload = resp.json()
-    result = (payload.get("chart") or {}).get("result") or []
-    if not result:
-        return pd.DataFrame()
-    node = result[0]
-    stamps = node.get("timestamp") or []
-    quote = ((node.get("indicators") or {}).get("quote") or [{}])[0]
-    if not stamps or not quote:
-        return pd.DataFrame()
-    frame = pd.DataFrame(
-        {
-            "date": [datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d") for t in stamps],
-            "open": quote.get("open"),
-            "high": quote.get("high"),
-            "low": quote.get("low"),
-            "close": quote.get("close"),
-            "volume": quote.get("volume"),
-        }
-    )
-    return frame.dropna(subset=["open", "high", "low", "close"])
+    frame = pd.DataFrame(recs)
+    return frame.sort_values("date").reset_index(drop=True)
 
 
-PROVIDERS = {"stooq": fetch_stooq, "yahoo": fetch_yahoo}
+PROVIDERS = {"nasdaq": fetch_nasdaq, "stockanalysis": fetch_stockanalysis}
 
 
 # --------------------------------------------------------------------------
@@ -241,7 +276,7 @@ def update_prices(
     """Bring every symbol in `symbols` up to date in the store."""
     dcfg = cfg.get("data", {})
     history_days = int(dcfg.get("history_days", 800))
-    providers = [p for p in dcfg.get("providers", ["stooq", "yahoo"]) if p in PROVIDERS]
+    providers = [p for p in dcfg.get("providers", ["nasdaq", "stockanalysis"]) if p in PROVIDERS]
     workers = int(dcfg.get("max_workers", 8))
     timeout = int(dcfg.get("request_timeout", 20))
     retries = int(dcfg.get("retries", 3))

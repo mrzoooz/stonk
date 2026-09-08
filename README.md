@@ -221,10 +221,27 @@ tests/           synthetic-pattern tests for every engine
 
 ## Data sources
 
-Stooq for daily bars with Yahoo Finance as a per-symbol fallback; the NASDAQ
-Trader symbol directory for the universe, with the SEC ticker file as backup.
-All free, none requiring a key. If one source rate-limits mid-run the fetcher
-disables it and continues on the other.
+Daily bars come from **Nasdaq's public quote API** (`api.nasdaq.com`), with
+**stockanalysis.com** as a fallback. The universe comes from the NASDAQ Trader
+symbol directory, with the SEC ticker file as backup. All free, none requiring
+an API key or an account.
+
+Two notes worth keeping, both established by running `tools/probe_sources.py`
+on a real runner rather than by assumption:
+
+- **Stooq and Yahoo do not work from CI.** Stooq answers every request with a
+  JavaScript browser challenge, on `.com` and `.pl` alike. Yahoo returns
+  `429 Too Many Requests` in 200ms for GitHub's IP ranges, with or without
+  browser headers and cookie priming. Neither is a rate limit that backing off
+  will solve, so neither is used.
+- **Nasdaq splits its universe by asset class.** `assetclass=stocks` returns an
+  empty table for an ETF rather than an error, so an empty result is retried as
+  `assetclass=etf`. The SPY benchmark needs this, and without it beta and
+  relative strength silently fail for every stock.
+
+If a source starts rate-limiting mid-run the fetcher disables it and continues
+on the other. Re-run the **Probe data sources** workflow if a source ever
+appears to break; it prints exactly what each one returns.
 
 ---
 

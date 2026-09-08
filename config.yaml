@@ -22,8 +22,10 @@ data:
   # Calendar days of history to keep per symbol.
   history_days: 800
   benchmark: SPY
-  providers: [stooq, yahoo]     # tried in order, per symbol
-  max_workers: 8
+  # Keyless sources that work from CI. Stooq serves a JavaScript browser
+  # challenge and Yahoo blocks datacenter IP ranges, so neither is usable.
+  providers: [nasdaq, stockanalysis]   # tried in order, per symbol
+  max_workers: 6
   request_timeout: 20
   retries: 3
 
