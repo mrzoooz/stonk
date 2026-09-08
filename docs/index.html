@@ -61,10 +61,17 @@
     <button id="d-star" class="icon-btn" aria-label="Star">&#9734;</button>
   </div>
   <div class="sheet-body">
-    <div class="range-row" id="range-row">
-      <button class="range" data-bars="65">3M</button>
-      <button class="range is-active" data-bars="130">6M</button>
-      <button class="range" data-bars="260">1Y</button>
+    <div class="chart-controls" id="chart-controls">
+      <div class="range-row" id="range-row" role="group" aria-label="Range">
+        <button class="range" data-months="3">3M</button>
+        <button class="range is-active" data-months="6">6M</button>
+        <button class="range" data-months="12">1Y</button>
+        <button class="range" data-months="24">2Y</button>
+      </div>
+      <div class="range-row" id="interval-row" role="group" aria-label="Candle interval">
+        <button class="range is-active" data-interval="daily">Daily</button>
+        <button class="range" data-interval="weekly">Weekly</button>
+      </div>
     </div>
     <div class="chart-wrap" id="chart-wrap">
       <canvas id="chart"></canvas>

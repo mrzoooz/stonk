@@ -163,6 +163,17 @@ Each detail page carries the chart (candles, 50/150/200MAs, shaded T cycles,
 pivot and stop lines), the trade plan, a position-size calculator, the
 contraction table, and the full pass/fail checklist for both engines.
 
+The chart has two independent controls: **range** (3M / 6M / 1Y / 2Y) and
+**interval** (daily or weekly candles). Weekly is the view criterion 5 is
+judged on - green weeks against red weeks - and it fits a whole base on a phone
+screen. Weekly candles are aggregated in the browser from the same daily bars,
+so switching costs no extra download.
+
+One deliberate choice: on the weekly chart the moving averages remain the
+*daily* 50/150/200 SMAs, sampled at each week's close. They are the lines the
+Stage 2 template is actually judged on. Switching them to 50/150/200-*week*
+averages would draw something the screen never tested.
+
 ---
 
 ## Tuning

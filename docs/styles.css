@@ -128,7 +128,10 @@ h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppe
 .sheet-title span { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px var(--pad) calc(var(--safe-bottom) + 40px); }
 
-.range-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.chart-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;
+                  align-items: center; justify-content: space-between; }
+.range-row { display: flex; gap: 6px; }
+#interval-row .range { min-width: 62px; }
 .range {
   background: var(--surface); border: 1px solid var(--line); color: var(--muted);
   border-radius: 8px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;

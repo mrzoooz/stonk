@@ -24,6 +24,55 @@
     return out;
   }
 
+  /* Group daily bars into weekly candles.
+
+     The moving averages stay the *daily* 50/150/200 SMAs sampled at each
+     week's close, not 50/150/200-week averages: they are the same lines the
+     Stage 2 template is judged on, just drawn at weekly resolution. Switching
+     them to week counts would show something the screen never tested. */
+  function aggregateWeekly(series) {
+    var n = series.c.length;
+    var out = { d: [], o: [], h: [], l: [], c: [], v: [] };
+    var maKeys = ['ma50', 'ma150', 'ma200'].filter(function (k) { return series[k]; });
+    maKeys.forEach(function (k) { out[k] = []; });
+    // Lets caller remap daily bar indices (contraction markers) onto weeks.
+    var dayToWeek = new Array(n);
+
+    var key = null;
+    for (var i = 0; i < n; i++) {
+      var k = mondayOf(series.d[i]);
+      if (k !== key) {
+        key = k;
+        out.d.push(series.d[i]);
+        out.o.push(series.o[i]);
+        out.h.push(series.h[i]);
+        out.l.push(series.l[i]);
+        out.c.push(series.c[i]);
+        out.v.push(series.v[i] || 0);
+        maKeys.forEach(function (mk) { out[mk].push(series[mk][i]); });
+      } else {
+        var j = out.d.length - 1;
+        out.d[j] = series.d[i];                                  // label on the week's last session
+        if (series.h[i] > out.h[j]) out.h[j] = series.h[i];
+        if (series.l[i] < out.l[j]) out.l[j] = series.l[i];
+        out.c[j] = series.c[i];
+        out.v[j] += series.v[i] || 0;
+        maKeys.forEach(function (mk) { out[mk][j] = series[mk][i]; });
+      }
+      dayToWeek[i] = out.d.length - 1;
+    }
+    out.dayToWeek = dayToWeek;
+    return out;
+  }
+
+  /* ISO date of the Monday starting the week that contains `iso`. */
+  function mondayOf(iso) {
+    var d = new Date(iso + 'T00:00:00Z');
+    var dow = (d.getUTCDay() + 6) % 7;        // Monday = 0
+    d.setUTCDate(d.getUTCDate() - dow);
+    return d.toISOString().slice(0, 10);
+  }
+
   function fmtPrice(v) {
     if (v >= 1000) return v.toFixed(0);
     if (v >= 100) return v.toFixed(1);
@@ -182,5 +231,5 @@
     });
   }
 
-  global.VCPChart = { draw: draw, COLORS: COLORS };
+  global.VCPChart = { draw: draw, COLORS: COLORS, aggregateWeekly: aggregateWeekly };
 })(window);

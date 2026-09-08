@@ -19,6 +19,11 @@ on:
         type: boolean
         required: false
         default: false
+      no_fetch:
+        description: "Skip fetching and re-evaluate from the cached prices (fast)"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: scan
@@ -60,7 +65,8 @@ jobs:
         run: |
           python -m screener.run \
             --limit "${{ github.event.inputs.limit || 0 }}" \
-            ${{ github.event.inputs.force_full == 'true' && '--force-full' || '' }}
+            ${{ github.event.inputs.force_full == 'true' && '--force-full' || '' }} \
+            ${{ github.event.inputs.no_fetch == 'true' && '--no-fetch' || '' }}
 
       - name: Save price cache
         if: always()

@@ -129,6 +129,7 @@ risk:
 output:
   # Series data (for the charts) is written for at most this many names.
   max_series: 400
-  series_bars: 260
+  # Two years of sessions, so the weekly chart has ~104 candles to show.
+  series_bars: 520
   # Names that pass Stage 2 but have no valid VCP are still listed, capped here.
   max_stage2_only: 600

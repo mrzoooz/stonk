@@ -6,6 +6,7 @@
   var DATA_URL = 'data/screen.json';
   var STAR_KEY = 'vcp.starred';
   var CALC_KEY = 'vcp.calc';
+  var CHART_KEY = 'vcp.chart';
 
   var state = {
     data: null,
@@ -14,14 +15,18 @@
     query: '',
     starred: loadStars(),
     current: null,
-    bars: 130
+    months: 6,
+    interval: 'daily'
   };
+
+  // Roughly how many bars make up a month at each interval.
+  var BARS_PER_MONTH = { daily: 21.7, weekly: 4.35 };
 
   var el = {};
   ['status', 'list', 'empty', 'tabs', 'search', 'sort', 'refresh', 'detail', 'back',
    'd-symbol', 'd-name', 'd-star', 'chart', 'chart-legend', 'plan', 'd-contractions',
    'd-vcp', 'd-stage2', 'acct', 'riskpct', 'calc-out', 'foot-note', 'range-row',
-   'chart-wrap', 'calc-card'
+   'chart-wrap', 'calc-card', 'interval-row', 'chart-controls'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // ------------------------------------------------------------- storage
@@ -225,7 +230,7 @@
     // position-size box - there is no pivot to size against.
     var hasPivot = !!(row.vcp && row.vcp.metrics && row.vcp.metrics.pivot != null);
     el['chart-wrap'].hidden = !row.has_series;
-    el['range-row'].hidden = !row.has_series;
+    el['chart-controls'].hidden = !row.has_series;
     el['calc-card'].hidden = !hasPivot;
 
     if (row.has_series) {
@@ -245,10 +250,28 @@
     var row = state.current;
     if (!row || !row._series) return;
     var v = (row.vcp && row.vcp.metrics) || {};
-    // Indices in the payload are already rebased onto the shipped series.
+    // Indices in the payload are already rebased onto the daily series.
     var contractions = (row.vcp && row.vcp.contractions) || [];
-    VCPChart.draw(el.chart, row._series, {
-      bars: state.bars,
+    var series = row._series;
+
+    if (state.interval === 'weekly') {
+      if (!row._weekly) row._weekly = VCPChart.aggregateWeekly(row._series);
+      var map = row._weekly.dayToWeek;
+      var lastDay = map.length - 1;
+      // Contraction markers are daily indices; move them onto their weeks.
+      contractions = contractions.map(function (c) {
+        return {
+          index: c.index,
+          depth_pct: c.depth_pct,
+          high_idx: map[Math.min(Math.max(c.high_idx, 0), lastDay)],
+          low_idx: map[Math.min(Math.max(c.low_idx, 0), lastDay)]
+        };
+      });
+      series = row._weekly;
+    }
+
+    VCPChart.draw(el.chart, series, {
+      bars: Math.round(state.months * BARS_PER_MONTH[state.interval]),
       pivot: v.pivot,
       support: v.support,
       contractions: contractions
@@ -444,15 +467,21 @@
     el['d-star'].classList.toggle('on', isStarred(state.current.symbol));
     render();
   });
-  el['range-row'].addEventListener('click', function (e) {
-    var b = e.target.closest('.range');
-    if (!b) return;
-    state.bars = parseInt(b.dataset.bars, 10);
-    Array.prototype.forEach.call(el['range-row'].children, function (x) {
-      x.classList.toggle('is-active', x === b);
+  function wireChartControls(row, key, parse) {
+    el[row].addEventListener('click', function (e) {
+      var b = e.target.closest('.range');
+      if (!b) return;
+      state[key] = parse(b);
+      Array.prototype.forEach.call(el[row].children, function (x) {
+        x.classList.toggle('is-active', x === b);
+      });
+      try { localStorage.setItem(CHART_KEY, JSON.stringify(
+        { months: state.months, interval: state.interval })); } catch (err) {}
+      drawChart();
     });
-    drawChart();
-  });
+  }
+  wireChartControls('range-row', 'months', function (b) { return parseFloat(b.dataset.months); });
+  wireChartControls('interval-row', 'interval', function (b) { return b.dataset.interval; });
   [el.acct, el.riskpct].forEach(function (input) {
     input.addEventListener('input', updateCalc);
   });
@@ -465,6 +494,22 @@
     var saved = JSON.parse(localStorage.getItem(CALC_KEY) || 'null');
     if (saved) { el.acct.value = saved.acct; el.riskpct.value = saved.riskPct; }
   } catch (e) {}
+
+  try {
+    var chartPref = JSON.parse(localStorage.getItem(CHART_KEY) || 'null');
+    if (chartPref) {
+      if (chartPref.months) state.months = chartPref.months;
+      if (chartPref.interval) state.interval = chartPref.interval;
+      markActive('range-row', 'months', String(state.months));
+      markActive('interval-row', 'interval', state.interval);
+    }
+  } catch (e) {}
+
+  function markActive(rowId, attr, value) {
+    Array.prototype.forEach.call(el[rowId].children, function (b) {
+      b.classList.toggle('is-active', b.dataset[attr] === value);
+    });
+  }
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
