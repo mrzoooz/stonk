@@ -159,9 +159,15 @@ def main() -> int:
     if results.exists():
         data = json.loads(results.read_text())
         reported = {}
+        rs_seen: list[int] = []
+        rs_missing: list[str] = []
         for bucket in ("ready", "watch", "stage2"):
             for row in data.get(bucket, []):
                 reported[row["symbol"]] = bucket
+                if row.get("rs_rating") is None:
+                    rs_missing.append(row["symbol"])
+                else:
+                    rs_seen.append(int(row["rs_rating"]))
         bad_stale = {s: b for s, b in reported.items() if s in stale}
         bad_split = {s: b for s, b in reported.items() if s in suspects}
         print(f"\n[3] published rows: {len(reported)}")
@@ -169,6 +175,13 @@ def main() -> int:
         print(f"    reported but split : {bad_split or 'none'}")
         buckets = Counter(reported.values())
         print(f"    buckets            : {dict(buckets)}")
+        # A published row with no RS Rating means the ranking pass missed it.
+        if rs_seen:
+            weak = sum(1 for v in rs_seen if v < 70)
+            print(f"    RS rating range    : {min(rs_seen)}-{max(rs_seen)}"
+                  f"  (median {sorted(rs_seen)[len(rs_seen) // 2]}, {weak} below 70)")
+        print(f"    missing RS rating  : {len(rs_missing)}"
+              + (f" e.g. {rs_missing[:5]}" if rs_missing else ""))
     else:
         print("\n[3] no results file to cross-check")
 
