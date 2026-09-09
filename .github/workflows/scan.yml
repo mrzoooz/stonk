@@ -24,6 +24,15 @@ on:
         type: boolean
         required: false
         default: false
+      overrides:
+        description: "Config overrides for this run, space separated (e.g. vcp.base_lookback_days=180)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Compute and report counts without publishing to Pages"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: scan
@@ -66,7 +75,8 @@ jobs:
           python -m screener.run \
             --limit "${{ github.event.inputs.limit || 0 }}" \
             ${{ github.event.inputs.force_full == 'true' && '--force-full' || '' }} \
-            ${{ github.event.inputs.no_fetch == 'true' && '--no-fetch' || '' }}
+            ${{ github.event.inputs.no_fetch == 'true' && '--no-fetch' || '' }} \
+            $(for o in ${{ github.event.inputs.overrides }}; do printf ' --set %s' "$o"; done)
 
       - name: Save price cache
         if: always()
@@ -122,13 +132,16 @@ jobs:
 
       # enablement turns Pages on via the API on the first run, so the repo
       # does not need the Settings -> Pages click before the first deploy.
-      - uses: actions/configure-pages@v5
+      - if: github.event.inputs.dry_run != 'true'
+        uses: actions/configure-pages@v5
         with:
           enablement: true
-      - uses: actions/upload-pages-artifact@v3
+      - if: github.event.inputs.dry_run != 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: docs
       - id: deployment
+        if: github.event.inputs.dry_run != 'true'
         uses: actions/deploy-pages@v4
 
     environment:

@@ -183,6 +183,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--symbols", default="", help="comma-separated symbols to scan instead")
     parser.add_argument("--no-fetch", action="store_true", help="use only cached bars")
     parser.add_argument("--force-full", action="store_true", help="refetch full history")
+    parser.add_argument(
+        "--set", dest="overrides", action="append", default=[], metavar="PATH=VALUE",
+        help="Override a config value for this run, e.g. --set vcp.base_lookback_days=180. "
+             "Repeatable. Lets a threshold be tested without editing config.yaml.",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -193,6 +198,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     started = time.time()
     cfg = load_config(args.config)
+    for override in args.overrides:
+        if "=" not in override:
+            raise SystemExit(f"--set expects PATH=VALUE, got {override!r}")
+        path, _, raw = override.partition("=")
+        node = cfg
+        parts = path.strip().split(".")
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        try:
+            value = json.loads(raw)
+        except ValueError:
+            value = raw
+        node[parts[-1]] = value
+        log.info("config override: %s = %r", path.strip(), value)
     if args.limit:
         cfg.setdefault("universe", {})["limit"] = args.limit
 
