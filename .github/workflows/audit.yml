@@ -31,3 +31,5 @@ jobs:
           restore-keys: |
             scan-output-
       - run: python tools/audit_data.py
+        env:
+          PYTHONPATH: .
