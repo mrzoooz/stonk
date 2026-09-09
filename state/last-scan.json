@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-09T15:48:43+00:00",
+  "generated_at": "2026-09-09T16:27:29+00:00",
   "as_of": "2026-09-08",
   "counts": {
     "ready": 4,
@@ -10,7 +10,7 @@
   },
   "watch_reasons": {
     "final contraction outside the tight range": 59,
-    "risk above ceiling": 55,
+    "risk above ceiling": 56,
     "no volume dry-up": 39,
     "pivot already broken (missed entry)": 37,
     "reward:risk below minimum": 16,
@@ -33,5 +33,5 @@
     "9": 2,
     "10": 4
   },
-  "elapsed_sec": 2112.6
+  "elapsed_sec": 49.5
 }
