@@ -118,9 +118,12 @@
     // price scale, so overlaying it would be meaningless.
     var padL = 6, padR = 46, padT = 10, padB = 18;
     var hasRS = !!(series.rs && series.rs.length);
-    var rsH = hasRS ? Math.round(cssH * 0.15) : 0;
-    var rsGap = hasRS ? 8 : 0;
-    var volH = Math.round(cssH * 0.18);
+    // A quarter of the canvas: at 15% the line was a few pixels of wiggle and
+    // you could not tell a trend from noise. Volume gives up a little room to
+    // pay for it, and the canvas itself is taller.
+    var rsH = hasRS ? Math.round(cssH * 0.26) : 0;
+    var rsGap = hasRS ? 10 : 0;
+    var volH = Math.round(cssH * 0.15);
     var priceTop = padT + rsH + rsGap;
     var priceH = cssH - priceTop - padB - volH - 6;
     var plotW = cssW - padL - padR;
@@ -214,6 +217,11 @@
         }
 
       }
+      // Separator, so the pane reads as its own panel.
+      var sepY = Math.round(padT + rsH + rsGap / 2) + 0.5;
+      ctx.strokeStyle = COLORS.grid; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padL, sepY); ctx.lineTo(padL + plotW, sepY); ctx.stroke();
     }
 
     // --- grid + price axis
