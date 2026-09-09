@@ -23,17 +23,40 @@ import numpy as np
 from screener.config import ROOT, load_config
 from screener.fetch import PriceStore
 
-# Ratios a split produces. Anything landing near one of these is very likely a
-# corporate action rather than a real price move.
-SPLIT_RATIOS = [2, 3, 4, 5, 6, 7, 8, 10, 15, 20, 1.5, 2.5, 3 / 2, 4 / 3, 5 / 4, 5 / 3]
+# Ratios an actual split produces. Deliberately excludes 1.25, 1.33, 1.5 and
+# 2.5: those sit inside the range of ordinary single-day moves in volatile
+# small caps, so including them flags hundreds of real price moves as splits.
+SPLIT_RATIOS = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 50]
 
 
-def near_split(ratio: float, tol: float = 0.04) -> float | None:
+def near_split(ratio: float, tol: float = 0.015) -> float | None:
+    """A price ratio close enough to a whole-number split to be worth checking."""
     for r in SPLIT_RATIOS:
         for cand in (r, 1 / r):
             if abs(ratio - cand) / cand <= tol:
                 return cand
     return None
+
+
+def volume_corroborates(vols, i: int, price_ratio: float, window: int = 10) -> tuple[bool, float]:
+    """Does share volume step the way a split would?
+
+    Nasdaq serves unadjusted volume too, so a k-for-1 forward split should
+    roughly multiply share volume by k while dividing the price by k. A real
+    price move has no such relationship, which is what separates the two.
+    """
+    before = vols[max(0, i - window + 1):i + 1]
+    after = vols[i + 1:i + 1 + window]
+    if len(before) < 3 or len(after) < 3:
+        return False, float("nan")
+    med_before, med_after = float(np.median(before)), float(np.median(after))
+    if med_before <= 0:
+        return False, float("nan")
+    observed = med_after / med_before
+    expected = price_ratio                      # price/k  <->  volume*k
+    if expected <= 0:
+        return False, observed
+    return abs(observed - expected) / expected <= 0.45, observed
 
 
 def main() -> int:
@@ -71,6 +94,8 @@ def main() -> int:
 
     # --- 2. split-like jumps --------------------------------------------
     print(f"\n[2] scanning for close-to-close jumps over {args.jump_pct:.0f}% ...")
+    big_moves = 0
+    ratio_shaped: dict[str, list] = {}
     suspects: dict[str, list] = {}
     hist = int(cfg.get("data", {}).get("history_days", 800))
     for sym in last_dates:
@@ -78,24 +103,32 @@ def main() -> int:
         if len(df) < 30:
             continue
         c = df["close"].to_numpy(dtype=float)
+        v = df["volume"].to_numpy(dtype=float)
         prev, cur = c[:-1], c[1:]
         with np.errstate(divide="ignore", invalid="ignore"):
             change = np.abs(cur / prev - 1.0) * 100.0
-        hits = np.where(change > args.jump_pct)[0]
-        for i in hits:
-            if prev[i] <= 0:
+        for i in np.where(change > args.jump_pct)[0]:
+            if prev[i] <= 0 or cur[i] <= 0:
                 continue
+            big_moves += 1
             ratio = prev[i] / cur[i]
             split = near_split(ratio)
-            if split:
+            if not split:
+                continue
+            ratio_shaped.setdefault(sym, []).append(i)
+            ok, observed = volume_corroborates(v, i, ratio)
+            if ok:
                 suspects.setdefault(sym, []).append(
                     (df.index[i + 1].strftime("%Y-%m-%d"), round(prev[i], 2),
-                     round(cur[i], 2), round(ratio, 3))
+                     round(cur[i], 2), round(ratio, 3), round(observed, 2))
                 )
-    print(f"    symbols with split-shaped steps: {len(suspects)}")
+    print(f"    single-day moves over {args.jump_pct:.0f}%          : {big_moves}")
+    print(f"    of those, near a whole split ratio : {sum(len(x) for x in ratio_shaped.values())}"
+          f" across {len(ratio_shaped)} symbols")
+    print(f"    AND corroborated by a volume step  : {len(suspects)} symbols")
     for sym, hits in list(sorted(suspects.items()))[:15]:
-        d, a, b, r = hits[0]
-        print(f"      {sym:8s} {d}  {a} -> {b}  (ratio {r})")
+        d, a, b, r, vr = hits[0]
+        print(f"      {sym:8s} {d}  {a} -> {b}  price ratio {r}, volume ratio {vr}")
 
     # --- 3. did any of this reach the published results? -----------------
     results = Path(args.results)
