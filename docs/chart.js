@@ -8,7 +8,8 @@
   var COLORS = {
     up: '#22c55e', down: '#ef4444',
     ma50: '#38bdf8', ma150: '#f59e0b', ma200: '#a78bfa',
-    pivot: '#e6edf3', support: '#ef4444',
+    pivot: '#ef4444', support: '#22c55e',
+    rsUp: '#3b82f6', rsDown: '#a855f7', rsMa: '#f59e0b',
     grid: '#24303d', text: '#8b9bb0', volUp: '#1f6f3f', volDown: '#7f2b2b',
     warn: '#f59e0b'
   };
@@ -34,7 +35,8 @@
   function aggregateWeekly(series) {
     var n = series.c.length;
     var out = { d: [], o: [], h: [], l: [], c: [], v: [] };
-    var maKeys = ['ma50', 'ma150', 'ma200'].filter(function (k) { return series[k]; });
+    var maKeys = ['ma50', 'ma150', 'ma200', 'rs', 'rsma']
+      .filter(function (k) { return series[k]; });
     maKeys.forEach(function (k) { out[k] = []; });
     // Lets caller remap daily bar indices (contraction markers) onto weeks.
     var dayToWeek = new Array(n);
@@ -100,10 +102,17 @@
     var n = Math.min(opts.bars || total, total);
     var from = total - n;
 
-    // Layout: price pane on top, volume pane beneath.
+    // Layout: RS pane on top (when there is an RS line), then price, then
+    // volume. The RS line sits in its own pane rather than over the candles -
+    // its units are the stock priced in benchmarks, nothing to do with the
+    // price scale, so overlaying it would be meaningless.
     var padL = 6, padR = 46, padT = 10, padB = 18;
+    var hasRS = !!(series.rs && series.rs.length);
+    var rsH = hasRS ? Math.round(cssH * 0.15) : 0;
+    var rsGap = hasRS ? 8 : 0;
     var volH = Math.round(cssH * 0.18);
-    var priceH = cssH - padT - padB - volH - 6;
+    var priceTop = padT + rsH + rsGap;
+    var priceH = cssH - priceTop - padB - volH - 6;
     var plotW = cssW - padL - padR;
 
     var slice = function (arr) { return arr.slice(from); };
@@ -140,10 +149,68 @@
     var pad = (hi - lo) * 0.06;
     lo -= pad; hi += pad;
 
-    var y = function (p) { return padT + priceH - (p - lo) / (hi - lo) * priceH; };
+    var y = function (p) { return priceTop + priceH - (p - lo) / (hi - lo) * priceH; };
     var slot = plotW / n;
     var bw = Math.max(1, Math.min(9, slot * 0.68));
     var x = function (i) { return padL + slot * (i + 0.5); };
+
+    // --- RS pane: the stock priced in benchmarks, over its own average.
+    //
+    // Blue above the average means the stock is beating the market and the
+    // strength is holding; purple below means it is lagging. The level of the
+    // line means nothing on its own - only its direction and which side of
+    // the average it sits - so the pane scales to the window.
+    if (hasRS) {
+      var rs = slice(series.rs), rsma = slice(series.rsma || []);
+      var rlo = Infinity, rhi = -Infinity;
+      for (var r = 0; r < n; r++) {
+        var vals = [rs[r], rsma[r]];
+        for (var q = 0; q < 2; q++) {
+          var vv = vals[q];
+          if (vv == null || !isFinite(vv)) continue;
+          if (vv < rlo) rlo = vv; if (vv > rhi) rhi = vv;
+        }
+      }
+      if (isFinite(rlo) && isFinite(rhi) && rhi > rlo) {
+        var rpad = (rhi - rlo) * 0.12;
+        rlo -= rpad; rhi += rpad;
+        var ry = function (p) { return padT + rsH - (p - rlo) / (rhi - rlo) * rsH; };
+
+        // The 21-day average first, so the RS line reads on top of it.
+        ctx.strokeStyle = COLORS.rsMa; ctx.lineWidth = 1;
+        ctx.beginPath();
+        var startedMa = false;
+        for (var m2 = 0; m2 < n; m2++) {
+          var mv = rsma[m2];
+          if (mv == null || !isFinite(mv)) { startedMa = false; continue; }
+          if (!startedMa) { ctx.moveTo(x(m2), ry(mv)); startedMa = true; }
+          else ctx.lineTo(x(m2), ry(mv));
+        }
+        ctx.stroke();
+
+        // The RS line, drawn segment by segment so it can change colour where
+        // it crosses its average.
+        ctx.lineWidth = 1.5;
+        for (var t2 = 1; t2 < n; t2++) {
+          var a1 = rs[t2 - 1], b1 = rs[t2];
+          if (a1 == null || b1 == null || !isFinite(a1) || !isFinite(b1)) continue;
+          var ref = rsma[t2];
+          var above = ref == null || !isFinite(ref) ? true : b1 >= ref;
+          ctx.strokeStyle = above ? COLORS.rsUp : COLORS.rsDown;
+          ctx.beginPath();
+          ctx.moveTo(x(t2 - 1), ry(a1));
+          ctx.lineTo(x(t2), ry(b1));
+          ctx.stroke();
+        }
+
+        ctx.font = 'bold 9px -apple-system, sans-serif';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillStyle = COLORS.text;
+        var rsLabel = 'RS LINE vs ' + (opts.benchmark || 'SPY');
+        if (opts.rsRating != null) rsLabel += '   ·   RS RATING ' + opts.rsRating;
+        ctx.fillText(rsLabel, padL + 2, padT + 1);
+      }
+    }
 
     // --- grid + price axis
     ctx.font = '10px -apple-system, sans-serif';
@@ -168,7 +235,7 @@
       var shade = Math.min(0.05 + idx * 0.025, 0.16);
       ctx.fillStyle = c.widened ? 'rgba(245,158,11,' + (shade + 0.06) + ')'
                                 : 'rgba(56,189,248,' + shade + ')';
-      ctx.fillRect(x0, padT, Math.max(x1 - x0, 1), priceH);
+      ctx.fillRect(x0, priceTop, Math.max(x1 - x0, 1), priceH);
       // Label each consolidation with its number and how deep it was - the
       // shrinking sequence is the whole point of the pattern.
       var mid = (x0 + x1) / 2;
@@ -180,7 +247,7 @@
       // other, so stagger onto a second line instead.
       labelRow = (mid - width / 2 < lastLabelRight + 3) ? (labelRow + 1) % 2 : 0;
       lastLabelRight = mid + width / 2;
-      var top = padT + 9 + labelRow * 24;
+      var top = priceTop + 9 + labelRow * 24;
       // The pivot line often runs straight through this text, so lay a chip
       // behind it.
       var chipW = Math.max(width, 20) + 8;
@@ -198,7 +265,7 @@
     // --- volume pane
     var vMax = 0;
     for (var k = 0; k < n; k++) if (vols[k] > vMax) vMax = vols[k];
-    var volTop = padT + priceH + 6;
+    var volTop = priceTop + priceH + 6;
     for (var m = 0; m < n; m++) {
       var vh = vMax ? (vols[m] / vMax) * volH : 0;
       ctx.fillStyle = closes[m] >= opens[m] ? COLORS.volUp : COLORS.volDown;
@@ -220,7 +287,7 @@
     // --- moving averages
     ctx.save();
     ctx.beginPath();
-    ctx.rect(padL, padT, plotW, priceH);
+    ctx.rect(padL, priceTop, plotW, priceH);
     ctx.clip();
     maKeys.forEach(function (key) {
       ctx.strokeStyle = COLORS[key]; ctx.lineWidth = 1.4;

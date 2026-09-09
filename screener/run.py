@@ -40,7 +40,9 @@ def _round(x, nd=2):
     return None if not math.isfinite(v) else round(v, nd)
 
 
-def _series_payload(df: pd.DataFrame, bars: int, cfg: dict) -> dict:
+def _series_payload(
+    df: pd.DataFrame, bars: int, cfg: dict, bench_close: pd.Series | None = None
+) -> dict:
     """Compact OHLCV + moving averages for the phone chart."""
     s2 = cfg.get("stage2", {})
     close = df["close"]
@@ -59,6 +61,17 @@ def _series_payload(df: pd.DataFrame, bars: int, cfg: dict) -> dict:
     }
     for name, series in mas.items():
         payload[name] = [_round(x, 4) for x in series.tail(bars)]
+
+    # The RS line: the stock priced in units of the benchmark. Its level is
+    # arbitrary - only its direction matters - so it ships raw and the chart
+    # scales it. The 21-day average is the "is this strength holding" line.
+    if bench_close is not None and not bench_close.empty:
+        ratio = (close / bench_close.reindex(close.index).ffill()).replace(
+            [float("inf"), float("-inf")], float("nan")
+        )
+        span = int(cfg.get("stage2", {}).get("rs_line_ma", 21))
+        payload["rs"] = [_round(x, 6) for x in ratio.tail(bars)]
+        payload["rsma"] = [_round(x, 6) for x in ind.sma(ratio, span).tail(bars)]
     return payload
 
 
@@ -162,6 +175,7 @@ def _thin_row(row: dict) -> dict:
         "date": row["date"],
         "bucket": row["bucket"],
         "score": row.get("score", 0),
+        "rs_rating": row.get("rs_rating"),
         "metrics": {
             k: m.get(k)
             for k in (
@@ -277,6 +291,9 @@ def main(argv: list[str] | None = None) -> int:
     # newest session and the reference for judging a symbol stale.
     market_date = bench_df.index[-1] if not bench_df.empty else None
     rows: list[dict] = []
+    # Raw RS scores for every symbol that loads, kept or not: "beats 90% of
+    # all stocks" is only true if the ranking really is over all of them.
+    rs_raw: dict[str, float] = {}
     errors = 0
     adjusted_symbols = 0
     for i, meta in enumerate(universe, start=1):
@@ -291,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
                 df, splits = adjmod.back_adjust(df)
             else:
                 splits = adjmod.detect_splits(df)
+            rs_raw[sym] = ind.rs_score(df["close"])
             if splits:
                 adjusted_symbols += 1
                 log.debug("%s: back-adjusted %d split(s): %s", sym, len(splits),
@@ -310,6 +328,10 @@ def main(argv: list[str] | None = None) -> int:
             log.debug("%s failed: %s", sym, exc)
         if i % 500 == 0:
             log.info("evaluated %d/%d (kept %d)", i, len(universe), len(rows))
+
+    ratings = ind.rs_ratings(rs_raw)
+    for r in rows:
+        r["rs_rating"] = ratings.get(r["symbol"])
 
     order = {"ready": 0, "watch": 1, "stage2": 2}
     rows.sort(key=lambda r: (order.get(r["bucket"], 9), -r.get("score", 0)))
@@ -332,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
         df = store.load(row["symbol"], history_days)
         if df.empty:
             continue
-        payload_series = _series_payload(df, series_bars, cfg)
+        payload_series = _series_payload(df, series_bars, cfg, bench_close)
         (series_dir / f"{row['symbol']}.json").write_text(
             json.dumps(payload_series, separators=(",", ":"))
         )
@@ -369,6 +391,9 @@ def main(argv: list[str] | None = None) -> int:
             "preferred_max_risk_pct": cfg.get_path("risk.preferred_max_risk_pct"),
             "min_reward_risk": cfg.get_path("risk.min_reward_risk"),
             "preferred_reward_risk": cfg.get_path("risk.preferred_reward_risk"),
+            "benchmark": cfg.get_path("data.benchmark"),
+            "min_rs_rating": cfg.get_path("stage2.min_rs_rating"),
+            "preferred_rs_rating": cfg.get_path("stage2.preferred_rs_rating"),
             "min_contractions": cfg.get_path("vcp.min_contractions"),
             "final_depth_pct": [
                 cfg.get_path("vcp.final_depth_min_pct"),

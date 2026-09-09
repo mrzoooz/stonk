@@ -90,6 +90,15 @@
     if (shown <= L.okRisk) return 'good';
     return shown <= L.maxRisk ? 'warn' : 'bad';
   }
+  /* RS Rating: 80+ is what a leader looks like, 70 the floor worth watching,
+     below that the market is telling you it prefers something else. */
+  function rsClass(v) {
+    var c = (state.data && state.data.config) || {};
+    if (v == null) return '';
+    if (v >= (c.preferred_rs_rating || 80)) return 'good';
+    return v >= (c.min_rs_rating || 70) ? 'warn' : 'bad';
+  }
+
   function rrClass(v) {
     var L = limits();
     if (v == null || isNaN(v)) return '';
@@ -193,7 +202,7 @@
       ['50MA', num(s.ma50), ''],
       ['150MA', num(s.ma150), ''],
       ['Beta', num(s.beta), ''],
-      ['vs SPY', pct(s.rs_126d, 0), s.rs_126d > 0 ? 'good' : '']
+      ['RS', row.rs_rating == null ? '--' : row.rs_rating, rsClass(row.rs_rating)]
     ];
 
     return '' +
@@ -368,7 +377,9 @@
       pivot: v.pivot,
       support: v.support,
       contractions: contractions,
-      fitPriceOnly: fitPriceOnly
+      fitPriceOnly: fitPriceOnly,
+      rsRating: state.current && state.current.rs_rating,
+      benchmark: (state.data && state.data.benchmark) || 'SPY'
     });
     el['chart-legend'].innerHTML =
       (state.months === 'base'
@@ -378,7 +389,12 @@
       legendItem(VCPChart.COLORS.ma150, '150MA') +
       legendItem(VCPChart.COLORS.ma200, '200MA') +
       legendItem(VCPChart.COLORS.pivot, 'Pivot') +
-      legendItem(VCPChart.COLORS.support, 'Support');
+      legendItem(VCPChart.COLORS.support, 'Support') +
+      (series.rs
+        ? legendItem(VCPChart.COLORS.rsUp, 'RS beating') +
+          legendItem(VCPChart.COLORS.rsDown, 'RS lagging') +
+          legendItem(VCPChart.COLORS.rsMa, 'RS 21d avg')
+        : '');
   }
   function setCollapsed(on) {
     state.collapsed = on;
@@ -585,9 +601,21 @@
         (m.down_weeks || 0) + ' down, beta ' + num(m.beta) + ', ' + money(m.dollar_volume) + ' traded.</p>';
       return;
     }
+    var cfg = (state.data && state.data.config) || {};
+    var minRS = cfg.min_rs_rating || 70, okRS = cfg.preferred_rs_rating || 80;
+    var rs = row.rs_rating;
+    // Shown alongside the Stage 2 rules but not one of them: the rating is
+    // reported, not yet a gate, so it never silently drops a name.
+    var rsRow = checkRow([
+      'RS Rating ' + okRS + '+ (min ' + minRS + ')',
+      rs != null && rs >= minRS,
+      rs == null ? 'not ranked'
+        : rs + ' - beats ' + rs + '% of the market' +
+          (rs >= okRS ? '' : rs >= minRS ? ', short of ' + okRS : ', below the floor')
+    ]);
     el['d-stage2'].innerHTML = s2.checks.map(function (c) {
       return checkRow([c.label, c.passed, c.detail]);
-    }).join('');
+    }).join('') + rsRow;
   }
 
   function checkRow(r) {

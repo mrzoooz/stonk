@@ -122,3 +122,48 @@ def relative_strength(
 def week52(df: pd.DataFrame, days: int = 252) -> tuple[float, float]:
     tail = df.tail(days)
     return float(tail["low"].min()), float(tail["high"].max())
+
+
+def rs_score(close: pd.Series) -> float:
+    """Weighted 12-month price performance, the input to the RS Rating.
+
+    The classic form weights the most recent quarter double, so a stock that
+    has just started outperforming ranks above one coasting on gains made a
+    year ago:  2*(P/P-63) + (P/P-126) + (P/P-189) + (P/P-252).
+
+    This is a raw score, meaningless on its own - it only becomes an RS Rating
+    once ranked against every other stock in the universe.
+    """
+    c = close.dropna().to_numpy(dtype=float)
+    if len(c) < 253:
+        return float("nan")
+    last = c[-1]
+    if not np.isfinite(last) or last <= 0:
+        return float("nan")
+    legs = []
+    for lag, weight in ((63, 2.0), (126, 1.0), (189, 1.0), (252, 1.0)):
+        past = c[-1 - lag]
+        if not np.isfinite(past) or past <= 0:
+            return float("nan")
+        legs.append(weight * (last / past))
+    return float(sum(legs))
+
+
+def rs_ratings(scores: dict[str, float]) -> dict[str, int]:
+    """Percentile-rank raw RS scores into IBD-style 1-99 ratings.
+
+    99 means the stock outperformed 99% of the market. The rank is taken over
+    every symbol that has a score, not only the ones that survive the screen -
+    "beats 90% of all stocks" has to mean all stocks.
+    """
+    usable = {s: v for s, v in scores.items() if np.isfinite(v)}
+    if not usable:
+        return {}
+    order = sorted(usable, key=lambda s: usable[s])
+    n = len(order)
+    out: dict[str, int] = {}
+    for i, sym in enumerate(order):
+        # Fraction of the field this symbol beats, mapped onto 1-99.
+        pct = i / (n - 1) if n > 1 else 1.0
+        out[sym] = int(min(99, max(1, round(pct * 98) + 1)))
+    return out

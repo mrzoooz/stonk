@@ -45,3 +45,41 @@ def test_dollar_volume_sum_vs_mean():
     total = ind.dollar_volume(df, 21, "sum")
     mean = ind.dollar_volume(df, 21, "mean")
     assert total == pytest.approx(mean * 21)
+
+
+def test_rs_score_weights_the_most_recent_quarter_double():
+    """Two stocks up the same over a year rank differently by when they moved."""
+    import numpy as np
+    import pandas as pd
+    from screener import indicators as ind
+
+    idx = pd.date_range("2024-01-01", periods=300, freq="B")
+    # Recent mover: flat, then a late run. Early mover: the run, then flat.
+    late = np.concatenate([np.full(237, 100.0), np.linspace(100, 150, 63)])
+    early = np.concatenate([np.linspace(100, 150, 63), np.full(237, 150.0)])
+    a = ind.rs_score(pd.Series(late, index=idx))
+    b = ind.rs_score(pd.Series(early, index=idx))
+    assert a > b, (a, b)
+
+
+def test_rs_score_needs_a_full_year():
+    import pandas as pd
+    import numpy as np
+    from screener import indicators as ind
+
+    short = pd.Series(np.linspace(10, 20, 200),
+                      index=pd.date_range("2025-01-01", periods=200, freq="B"))
+    assert not np.isfinite(ind.rs_score(short))
+
+
+def test_rs_ratings_rank_the_whole_field_onto_1_to_99():
+    from screener import indicators as ind
+
+    scores = {f"S{i}": float(i) for i in range(100)}
+    out = ind.rs_ratings(scores)
+    assert out["S99"] == 99 and out["S0"] == 1
+    # Monotone: a better raw score never gets a worse rating.
+    ordered = [out[f"S{i}"] for i in range(100)]
+    assert ordered == sorted(ordered)
+    # Symbols with no score are simply absent rather than ranked as weakest.
+    assert ind.rs_ratings({"a": float("nan")}) == {}

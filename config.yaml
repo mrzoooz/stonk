@@ -48,6 +48,16 @@ data:
 # filters 1-6 that reproduce the manual screen).
 # ---------------------------------------------------------------------------
 stage2:
+  # Smoothing on the RS line - the "is this strength holding" average the
+  # line is coloured against. 21 sessions is one trading month.
+  rs_line_ma: 21
+
+  # RS Rating: the stock's weighted 12-month performance, percentile-ranked
+  # against every stock in the universe. 70 is the floor worth looking at,
+  # 80-90+ is what a leader looks like. Reported, not yet a hard filter.
+  min_rs_rating: 70
+  preferred_rs_rating: 80
+
   ma_short: 50
   ma_mid: 150
   ma_long: 200
