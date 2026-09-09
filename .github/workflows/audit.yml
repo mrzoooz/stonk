@@ -1,0 +1,33 @@
+name: Audit data
+
+# Inspects the real cached prices for faults the synthetic tests cannot see:
+# stale symbols and unadjusted split steps.
+on:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Restore price cache
+        uses: actions/cache/restore@v4
+        with:
+          path: cache
+          key: prices-
+          restore-keys: |
+            prices-
+      - name: Restore last scan output
+        uses: actions/cache/restore@v4
+        with:
+          path: docs/data
+          key: scan-output-
+          restore-keys: |
+            scan-output-
+      - run: python tools/audit_data.py
