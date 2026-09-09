@@ -90,6 +90,15 @@ def check(df, res, cfg) -> list[str]:
     if m["max_entry"] < m["pivot"]:
         bad.append("buy range is empty - the ceiling is below the pivot")
 
+    # 7. Profit levels and the break-even trigger are fixed steps off the pivot.
+    r = cfg["risk"]
+    for t, want in zip(m.get("profit_targets", []), r.get("profit_targets_pct", [])):
+        if abs(t["price"] - m["pivot"] * (1.0 + float(want) / 100.0)) > 1e-3:
+            bad.append(f"the +{want}% target is not that far above the pivot")
+    be = float(r.get("breakeven_move_pct", 5.0))
+    if abs(m["breakeven_trigger"] - m["pivot"] * (1.0 + be / 100.0)) > 1e-3:
+        bad.append("break-even trigger is not the configured step above the pivot")
+
     # 6. Highs and lows must actually exist in the bars they point at.
     for c in run:
         if abs(highs[c.high_idx] - c.high) > 1e-6 or abs(lows[c.low_idx] - c.low) > 1e-6:

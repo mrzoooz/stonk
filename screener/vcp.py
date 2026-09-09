@@ -389,6 +389,19 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
     # Chasing a breakout gives up the move you were positioning for, so there
     # is a highest price still worth paying: buy between the pivot and this,
     # never above it.
+    # Fixed profit levels as prices, measured from the pivot. The measured
+    # move is one projection; these are what the trade is actually managed
+    # against, so both are published rather than only the projection.
+    metrics["profit_targets"] = [
+        {"pct": float(t), "price": round(pivot * (1.0 + float(t) / 100.0), 4)}
+        for t in risk_cfg.get("profit_targets_pct", [10, 15, 20])
+    ]
+
+    # Where the stop moves up to the entry and the trade can no longer lose.
+    be_pct = float(risk_cfg.get("breakeven_move_pct", 5.0))
+    metrics["breakeven_pct"] = be_pct
+    metrics["breakeven_trigger"] = round(pivot * (1.0 + be_pct / 100.0), 4)
+
     metrics["max_entry"] = round(
         pivot * (1.0 + float(v.get("max_entry_above_pivot_pct", 5.0)) / 100.0), 4
     )

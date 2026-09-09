@@ -641,3 +641,26 @@ def test_base_height_cap_keeps_a_genuine_base_intact():
     run = _select_run(cycles, cfg)
     assert [round(c.depth_pct, 2) for c in run] == [6.7, 6.0, 3.8]
     assert all(c.widened is False for c in run)
+
+
+def test_profit_targets_and_breakeven_are_measured_from_the_pivot():
+    """Fixed percentage levels, plus the break-even trigger.
+
+    The trigger is the same arithmetic as the entry ceiling - a fixed step
+    above the pivot - so the two land on the same price. That is intended:
+    buying at the pivot, the price at which you may no longer chase is also
+    the price at which the stop comes up to your entry.
+    """
+    res = vcp.detect(build_base(t3_low=55.3), CFG)
+    m = res.metrics
+    pivot = m["pivot"]
+
+    assert [t["pct"] for t in m["profit_targets"]] == CFG["risk"]["profit_targets_pct"]
+    for t in m["profit_targets"]:
+        assert t["price"] == pytest.approx(pivot * (1 + t["pct"] / 100), abs=1e-3)
+
+    be = CFG["risk"]["breakeven_move_pct"]
+    assert m["breakeven_trigger"] == pytest.approx(pivot * (1 + be / 100), abs=1e-3)
+    assert m["breakeven_trigger"] == pytest.approx(m["max_entry"], abs=1e-6)
+    # Every target sits above the point where the trade is already risk-free.
+    assert all(t["price"] > m["breakeven_trigger"] for t in m["profit_targets"])

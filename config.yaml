@@ -199,7 +199,8 @@ vcp:
 # Risk / reward.
 # ---------------------------------------------------------------------------
 risk:
-  # Risk = (pivot - support) / pivot.
+  # Risk = (pivot - stop) / pivot, where the stop sits stop_buffer_dollars
+  # under the support line.
   #
   # Two tiers. The hard ceiling rejects a setup outright; the preferred ceiling
   # is what a good setup looks like. Anything between the two is shown but
@@ -208,10 +209,21 @@ risk:
   max_risk_pct: 8.0
   preferred_max_risk_pct: 5.0
 
-  # Reward target: measured move = pivot + (base high - base low).
+  # Reward target: measured move = pivot + (base high - base low). This is a
+  # chartist's projection rather than Minervini's method - he works in
+  # multiples of risk and takes partial profits around 20-25% - so the fixed
+  # percentages below are shown next to it instead of only the projection.
   target_method: measured_move
   min_reward_risk: 2.0
   preferred_reward_risk: 3.0
+
+  # Profit levels shown as prices, measured from the pivot.
+  profit_targets_pct: [10, 15, 20]
+
+  # Once the trade is this far above the pivot, move the stop up to the entry
+  # so the position can no longer lose. Same arithmetic as the entry ceiling,
+  # which is why the two land on the same price when you buy at the pivot.
+  breakeven_move_pct: 5.0
 
 output:
   # Series data (for the charts) is written for at most this many names.

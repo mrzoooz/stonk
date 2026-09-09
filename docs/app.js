@@ -429,11 +429,14 @@
       return;
     }
     var L = limits();
+    // The entry ceiling and the break-even trigger are the same arithmetic -
+    // a fixed step above the pivot - so they share one box rather than
+    // printing the same number twice.
+    var bePct = v.breakeven_pct == null ? 5 : v.breakeven_pct;
     var cells = [
       ['Buy above', num(v.pivot), ''],
-      ['Up to', num(v.max_entry), ''],
+      ['Up to · B/E at +' + pct(bePct, 0), num(v.max_entry), ''],
       ['Stop', num(stopOf(v)), ''],
-      ['Target', num(v.target), ''],
       ['Risk', pct(v.risk_pct), riskClass(v.risk_pct)],
       ['Reward:risk', v.reward_risk == null ? '--' : '1 : ' + v.reward_risk.toFixed(1),
        rrClass(v.reward_risk)],
@@ -459,18 +462,33 @@
         L.okRR + ' you want. It clears the 1 : ' + L.minRR + ' minimum, but the payoff is thin.');
     }
 
-    el.plan.innerHTML = '<h3>Trade plan</h3><div class="plan-grid">' +
-      cells.map(function (c) {
+    // Fixed percentage levels alongside the measured move, because the
+    // projection is the softest number here and should not stand alone.
+    var targets = (v.profit_targets || []).map(function (t) {
+      return ['+' + pct(t.pct, 0), num(t.price), ''];
+    });
+    targets.push(['Calculated', num(v.target), 'muted']);
+
+    function grid(list, cls) {
+      return '<div class="plan-grid' + (cls ? ' ' + cls : '') + '">' + list.map(function (c) {
         return '<div class="metric"><div class="k">' + c[0] + '</div><div class="v ' + c[2] +
                '">' + c[1] + '</div></div>';
-      }).join('') +
+      }).join('') + '</div>';
+    }
+
+    el.plan.innerHTML = '<h3>Trade plan</h3>' + grid(cells) +
+      '<h4 class="sub">Targets</h4>' + grid(targets, 'targets') +
       (caveats.length
         ? '<p class="caveat">' + caveats.map(escapeHTML).join(' ') + '</p>' : '') +
-      '</div><p class="plan-note">Buy on a break above ' + num(v.pivot) +
+      '<p class="plan-note">Buy on a break above ' + num(v.pivot) +
       ' on surging volume. The support line is the last consolidation low (' + num(v.support) +
       '), the low the pattern says should not be broken; the stop goes just under it at ' +
-      num(stopOf(v)) + '. Target is the measured move: pivot plus the base’s own depth (' +
-      pct(v.base_depth_pct) + ').</p>';
+      num(stopOf(v)) + '. Once price is +' + pct(bePct, 0) + ' above the pivot (' +
+      num(v.max_entry) + ') move the stop up to your entry so the trade cannot lose - the ' +
+      'same price as the entry ceiling, if you bought at the pivot. Targets are fixed ' +
+      'percentages from the pivot; “Calculated” is the measured move, pivot plus the ' +
+      'base’s own depth (' + pct(v.base_depth_pct) + '), which is a projection rather ' +
+      'than a level the pattern promises.</p>';
   }
 
   function renderContractions(row) {
