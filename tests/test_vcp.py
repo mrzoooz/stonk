@@ -254,3 +254,64 @@ def test_a_long_base_keeps_its_most_recent_contractions():
         f"final contraction at bar {final.low_idx} of {len(df)} - walk stopped early"
     )
     assert res.metrics["pivot"] == pytest.approx(final.high, abs=1e-3)
+
+
+def build_stepped_base(seed=21):
+    """A VCP whose consolidations step *upward*, as in the training example.
+
+    Highs ascend 70 -> 72 -> 74 while the pauses tighten 6.7% -> 6% -> 3.8%.
+    Each consolidation forms above the previous one, after breaking out of it.
+    """
+    closes, vols = [], []
+
+    def push(vals, vol):
+        closes.extend(vals)
+        vols.extend([vol] * len(vals))
+
+    push(leg(40, 66, 220), 1_200_000)          # the prior advance
+    # 1st consolidation: 70 -> 65.31 is 6.7%
+    push(leg(66, 70.0, 10), 1_500_000)
+    push(leg(70.0, 65.31, 12), 2_400_000)
+    push(leg(65.31, 72.0, 14), 1_600_000)
+    # 2nd: 72 -> 67.68 is 6.0%, and its high is ABOVE the first's
+    push(leg(72.0, 67.68, 11), 1_500_000)
+    push(leg(67.68, 74.0, 12), 1_100_000)
+    # 3rd: 74 -> 71.19 is 3.8%, higher again and tighter
+    push(leg(74.0, 71.19, 9), 700_000)
+    push(leg(71.19, 73.6, 8), 520_000)
+    closes.append(73.7)
+    vols.append(500_000)
+    return _bars(closes, vols, wiggle=0.0015, seed=seed)
+
+
+def test_a_stepped_vcp_is_detected_even_though_its_highs_ascend():
+    """Contraction is about the depth of each pause, not a fixed ceiling.
+
+    Anchoring on the window's highest high imposed descending highs and
+    collapsed any upward-stepping base into a single consolidation.
+    """
+    res = vcp.detect(build_stepped_base(), CFG)
+    depths = [c.depth_pct for c in res.contractions]
+    highs = [c.high for c in res.contractions]
+
+    assert len(depths) == 3, f"expected three consolidations, got {depths}"
+    assert highs == sorted(highs), f"highs should ascend here, got {highs}"
+    assert depths[0] > depths[1] > depths[2], f"depths must tighten, got {depths}"
+    assert depths[0] == pytest.approx(6.7, abs=1.2)
+    assert depths[1] == pytest.approx(6.0, abs=1.2)
+    assert depths[2] == pytest.approx(3.8, abs=1.2)
+
+
+def test_lows_still_ascend_in_a_stepped_base():
+    """The rule that survives in both shapes: no low is ever taken out again."""
+    res = vcp.detect(build_stepped_base(), CFG)
+    lows = [c.low for c in res.contractions]
+    assert lows == sorted(lows), lows
+
+
+def test_the_pivot_of_a_stepped_base_is_the_final_high():
+    res = vcp.detect(build_stepped_base(), CFG)
+    final = res.contractions[-1]
+    assert res.metrics["pivot"] == pytest.approx(final.high, abs=1e-3)
+    # The pivot must be the most recent high, not the tallest earlier one.
+    assert res.metrics["pivot"] == pytest.approx(max(c.high for c in res.contractions), abs=1e-3)

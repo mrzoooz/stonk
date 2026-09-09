@@ -87,40 +87,51 @@ def _walk_cycles(
     min_swing_bars: int,
     min_bars_since_low: int,
 ) -> list[Contraction]:
-    """Walk the nested-extreme staircase from `start` to `end` (inclusive)."""
+    """Find each completed consolidation between `start` and `end`.
+
+    The defining rule is the brief's own: a consolidation is finished when price
+    reaches a low that is never taken out again. So the consolidation lows are
+    exactly the bars whose low is the minimum of everything from that bar
+    onward - which makes the sequence of lows ascending by construction.
+
+    Each low is then paired with the peak that preceded it, taken from after
+    the previous consolidation ended.
+
+    Note what is deliberately *not* required: that the highs descend. A VCP can
+    step upward - each consolidation forming above the last, at a higher price,
+    after breaking out of it - while still contracting, because contraction is
+    about the depth of each pause, not about a fixed ceiling. An earlier version
+    anchored on the highest high in the window and walked forward from there,
+    which silently imposed descending highs and made every stepped base look
+    like a single consolidation.
+    """
     out: list[Contraction] = []
     if end - start < min_swing_bars * 2:
         return out
 
-    # A high can only start a consolidation if there is room after it for a
-    # decline *and* for the resulting low to prove it holds. Without this
-    # bound a stock breaking out to a new high would make today's bar the
-    # running maximum, and the walk would stop before seeing the base that
-    # produced the breakout.
-    search_end = end - (min_swing_bars + min_bars_since_low)
-    if search_end <= start:
-        return out
+    # suffix_min[i] is the lowest low from bar i to the end of the window, so
+    # lows[i] == suffix_min[i] marks a low that nothing later undercuts.
+    window = lows[start : end + 1]
+    suffix_min = np.minimum.accumulate(window[::-1])[::-1]
+    holds = np.flatnonzero(window <= suffix_min + 1e-12) + start
 
-    high_idx = int(np.argmax(highs[start : search_end + 1])) + start
+    seg_start = start
+    for raw_low_idx in holds:
+        low_idx = int(raw_low_idx)
+        # The low has to sit far enough after the peak to be a decline, and far
+        # enough before the end to have proved it holds.
+        if low_idx <= seg_start or end - low_idx < min_bars_since_low:
+            continue
+        high_idx = int(np.argmax(highs[seg_start:low_idx])) + seg_start
+        if low_idx - high_idx < min_swing_bars:
+            continue
 
-    while len(out) < MAX_RAW_CONTRACTIONS:  # bound is a guard, not a limit
-        seg_start = high_idx + 1
-        # Need room for a decline and for the low to then prove it holds.
-        if seg_start + min_swing_bars > end:
-            break
-
-        low_idx = int(np.argmin(lows[seg_start : end + 1])) + seg_start
-        high_p = float(highs[high_idx])
-        low_p = float(lows[low_idx])
+        high_p, low_p = float(highs[high_idx]), float(lows[low_idx])
         if high_p <= 0:
-            break
+            continue
         depth = (high_p - low_p) / high_p * 100.0
-
-        # A consolidation only counts once its low has held for a few bars -
-        # otherwise we would be calling today's dip a finished T cycle.
-        held_bars = end - low_idx
-        if depth < MIN_MEANINGFUL_DEPTH_PCT or held_bars < min_bars_since_low:
-            break
+        if depth < MIN_MEANINGFUL_DEPTH_PCT:
+            continue
 
         seg_vol = vols[high_idx : low_idx + 1]
         out.append(
@@ -137,14 +148,9 @@ def _walk_cycles(
                 avg_volume=float(np.mean(seg_vol)) if seg_vol.size else float("nan"),
             )
         )
-
-        nxt = low_idx + 1
-        if nxt > search_end:
+        seg_start = low_idx + 1
+        if len(out) >= MAX_RAW_CONTRACTIONS:
             break
-        next_high_idx = int(np.argmax(highs[nxt : search_end + 1])) + nxt
-        if next_high_idx <= high_idx:
-            break
-        high_idx = next_high_idx
 
     return out
 

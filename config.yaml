@@ -97,8 +97,14 @@ vcp:
   max_contractions: 8
 
   # Each contraction must be at most this fraction of the previous one's depth.
-  # 1.0 = "merely narrower"; 0.85 = "meaningfully narrower".
-  contraction_shrink_factor: 0.85
+  # 1.0 = "merely narrower"; lower demands a bigger step down each time.
+  #
+  # Set from the reference example rather than by taste: a textbook base
+  # tightening 6.7% -> 6.0% -> 3.8% steps by ratios of 0.90 and 0.63. At 0.85
+  # the first of those pairs is rejected and the base reads as two
+  # consolidations instead of three, so 0.85 was stricter than the pattern it
+  # was meant to describe.
+  contraction_shrink_factor: 0.95
 
   # "Price never goes below B again" - each consolidation low must sit at or
   # above the previous one.
