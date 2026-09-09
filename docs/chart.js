@@ -254,7 +254,7 @@
       ctx.font = '10px -apple-system, sans-serif';
     }
     level(opts.pivot, COLORS.pivot, 'PIVOT ' + fmtPrice(opts.pivot || 0));
-    level(opts.support, COLORS.support, 'STOP ' + fmtPrice(opts.support || 0));
+    level(opts.support, COLORS.support, 'SUPPORT ' + fmtPrice(opts.support || 0));
 
     // --- date axis: first, middle, last
     ctx.fillStyle = COLORS.text; ctx.font = '9px -apple-system, sans-serif';

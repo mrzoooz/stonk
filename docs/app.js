@@ -98,6 +98,10 @@
     return shown >= L.minRR ? 'warn' : 'bad';
   }
 
+  // The stop sits under the support line; fall back to the line itself for a
+  // bundle published before the buffer existed.
+  function stopOf(v) { return v.stop != null ? v.stop : v.support; }
+
   var STATUS_LABEL = {
     actionable: 'In buy zone',
     broke_out: 'Missed - pivot already broken',
@@ -182,7 +186,7 @@
 
     var metrics = hasVcp ? [
       ['Pivot', num(v.pivot), ''],
-      ['Stop', num(v.support), ''],
+      ['Stop', num(stopOf(v)), ''],
       ['Risk', pct(v.risk_pct), riskClass(v.risk_pct)],
       ['R:R', v.reward_risk == null ? '--' : v.reward_risk.toFixed(1), rrClass(v.reward_risk)]
     ] : [
@@ -374,7 +378,7 @@
       legendItem(VCPChart.COLORS.ma150, '150MA') +
       legendItem(VCPChart.COLORS.ma200, '200MA') +
       legendItem(VCPChart.COLORS.pivot, 'Pivot') +
-      legendItem(VCPChart.COLORS.support, 'Stop');
+      legendItem(VCPChart.COLORS.support, 'Support');
   }
   function setCollapsed(on) {
     state.collapsed = on;
@@ -428,7 +432,7 @@
     var cells = [
       ['Buy above', num(v.pivot), ''],
       ['Up to', num(v.max_entry), ''],
-      ['Stop', num(v.support), ''],
+      ['Stop', num(stopOf(v)), ''],
       ['Target', num(v.target), ''],
       ['Risk', pct(v.risk_pct), riskClass(v.risk_pct)],
       ['Reward:risk', v.reward_risk == null ? '--' : '1 : ' + v.reward_risk.toFixed(1),
@@ -463,8 +467,9 @@
       (caveats.length
         ? '<p class="caveat">' + caveats.map(escapeHTML).join(' ') + '</p>' : '') +
       '</div><p class="plan-note">Buy on a break above ' + num(v.pivot) +
-      ' on surging volume. The stop sits at the last consolidation low (' + num(v.support) +
-      '), which is the low the pattern says should not be broken. Target is the measured move: pivot plus the base’s own depth (' +
+      ' on surging volume. The support line is the last consolidation low (' + num(v.support) +
+      '), the low the pattern says should not be broken; the stop goes just under it at ' +
+      num(stopOf(v)) + '. Target is the measured move: pivot plus the base’s own depth (' +
       pct(v.base_depth_pct) + ').</p>';
   }
 
@@ -585,7 +590,7 @@
       el['calc-out'].textContent = 'Enter an account size and the percent of it you are willing to lose on this trade.';
       return;
     }
-    var perShare = v.pivot - v.support;
+    var perShare = v.pivot - stopOf(v);
     if (perShare <= 0) { el['calc-out'].textContent = '--'; return; }
     var dollarsAtRisk = acct * riskPct / 100;
     var shares = Math.floor(dollarsAtRisk / perShare);

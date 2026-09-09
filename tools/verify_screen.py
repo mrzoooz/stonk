@@ -73,9 +73,22 @@ def check(df, res, cfg) -> list[str]:
     if abs(m["support"] - final.low) > 1e-3:
         bad.append("support is not the final contraction's low")
 
-    # 5. Risk is definitionally the final contraction's depth.
-    if abs(m["risk_pct"] - final.depth_pct) > 0.02:
-        bad.append("risk does not equal the final contraction depth")
+    # 5. The stop sits one buffer under the support line, and risk is measured
+    #    from the stop rather than from the line.
+    buf = float(v.get("stop_buffer_dollars", 0.10))
+    if abs(m["stop"] - (final.low - buf)) > 1e-3:
+        bad.append("stop is not one buffer under the support line")
+    want_risk = (m["pivot"] - m["stop"]) / m["pivot"] * 100.0
+    if abs(m["risk_pct"] - want_risk) > 0.02:
+        bad.append("risk does not match pivot and stop")
+
+    # 6. The entry ceiling is a fixed step above the pivot, so the buy range is
+    #    never empty the way "stop x (1 + max risk)" could make it.
+    ceiling = float(v.get("max_entry_above_pivot_pct", 5.0))
+    if abs(m["max_entry"] - m["pivot"] * (1.0 + ceiling / 100.0)) > 1e-3:
+        bad.append("max entry is not the configured step above the pivot")
+    if m["max_entry"] < m["pivot"]:
+        bad.append("buy range is empty - the ceiling is below the pivot")
 
     # 6. Highs and lows must actually exist in the bars they point at.
     for c in run:

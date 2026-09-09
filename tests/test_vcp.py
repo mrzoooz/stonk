@@ -63,12 +63,21 @@ def test_pivot_and_support_come_from_the_final_contraction():
     assert res.metrics["support"] == pytest.approx(final.low, abs=1e-3)
 
 
-def test_risk_is_pivot_relative_to_support():
+def test_risk_is_pivot_relative_to_the_stop_under_support():
+    """The stop sits a fixed amount under the support line, and risk uses it.
+
+    A stop exactly on the low is taken out by any wick that matches the prior
+    low, so the buffer is part of the trade rather than a display detail - it
+    has to be in the risk number too.
+    """
     res = vcp.detect(build_base(), CFG)
     m = res.metrics
-    expected = (m["pivot"] - m["support"]) / m["pivot"] * 100
+    buf = CFG["vcp"]["stop_buffer_dollars"]
+    assert m["stop"] == pytest.approx(m["support"] - buf, abs=1e-6)
+    expected = (m["pivot"] - m["stop"]) / m["pivot"] * 100
     assert m["risk_pct"] == pytest.approx(expected, abs=0.01)
-    assert m["risk_pct"] == pytest.approx(m["final_depth_pct"], abs=0.01)
+    # Risk is now a shade wider than the consolidation's own depth.
+    assert m["risk_pct"] > m["final_depth_pct"]
 
 
 def test_tight_base_passes_and_wide_base_fails_the_risk_ceiling():
@@ -403,16 +412,26 @@ def test_first_contraction_beyond_fifty_percent_is_rejected():
         assert "stage 4 has not finished" in res.reason
 
 
-def test_max_entry_keeps_the_risk_within_the_ceiling():
-    """The entry ceiling is the stop plus the risk allowance, not the pivot."""
+def test_max_entry_is_a_fixed_step_above_the_pivot():
+    """The entry ceiling is measured from the pivot, so the range is never empty.
+
+    Deriving it from the stop and the risk allowance put the ceiling *below*
+    the pivot whenever risk exceeded that allowance, which printed an
+    impossible instruction: "buy above 224.31, up to 218.74".
+    """
     res = vcp.detect(build_base(t3_low=55.3), CFG)
     m = res.metrics
-    ceiling = CFG["risk"]["max_risk_pct"]
-    assert m["max_entry"] == pytest.approx(m["support"] * (1 + ceiling / 100), abs=1e-3)
-    assert m["max_entry"] > m["pivot"], "there should be room above the pivot to fill"
-    # Buying at the ceiling still keeps the loss to the stop within the limit.
-    risk_at_ceiling = (m["max_entry"] - m["support"]) / m["max_entry"] * 100
-    assert risk_at_ceiling <= ceiling + 1e-6
+    step = CFG["vcp"]["max_entry_above_pivot_pct"]
+    assert m["max_entry"] == pytest.approx(m["pivot"] * (1 + step / 100), abs=1e-3)
+    assert m["max_entry"] > m["pivot"], "there must be room above the pivot to fill"
+
+
+def test_the_buy_range_is_never_empty_even_on_a_wide_base():
+    """Whatever the risk, the ceiling stays above the pivot."""
+    res = vcp.detect(build_base(t3_low=51.0), CFG)
+    m = res.metrics
+    if m.get("pivot") is not None:
+        assert m["max_entry"] > m["pivot"], (m["max_entry"], m["pivot"], m["risk_pct"])
 
 
 def test_preferred_levels_are_reported_separately_from_pass_fail():

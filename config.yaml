@@ -177,6 +177,16 @@ vcp:
   # Once price is this far above the pivot the entry is gone - the name is
   # extended, not actionable.
   max_extended_above_pivot_pct: 5.0
+
+  # The stop goes a little under the support line rather than exactly on it.
+  # A stop sitting on the low to the cent is taken out by any wick that
+  # matches the prior low, which is a common way to be shaken out of a base
+  # that then works.
+  stop_buffer_dollars: 0.10
+
+  # How far above the pivot is still worth paying. Chasing further than this
+  # gives up too much of the move before the trade even starts.
+  max_entry_above_pivot_pct: 5.0
   # A breakout counts when price clears the pivot on this multiple of the
   # 50-day average volume. Reported for context; a stock that has already
   # cleared its pivot is a missed entry, not a candidate.

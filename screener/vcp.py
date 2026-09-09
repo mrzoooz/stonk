@@ -256,14 +256,17 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
 
     pivot = final.high
     support = final.low
+    # The stop sits a little under the support line, not on it: a stop exactly
+    # on the low is taken out by any wick that matches the prior low.
+    stop = support - float(v.get("stop_buffer_dollars", 0.10))
     price = float(closes[-1])
-    risk_pct = (pivot - support) / pivot * 100.0 if pivot > 0 else float("nan")
+    risk_pct = (pivot - stop) / pivot * 100.0 if pivot > 0 else float("nan")
 
     base_high = float(np.max(highs[first.high_idx : end + 1]))
     base_low = float(np.min(lows[first.high_idx : end + 1]))
     target = pivot + (base_high - base_low)
     reward = target - pivot
-    risk_abs = pivot - support
+    risk_abs = pivot - stop
     rr = reward / risk_abs if risk_abs > 0 else float("nan")
 
     dry_days = int(v.get("dryup_days", 5))
@@ -299,6 +302,7 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
         "contraction_count": len(run),
         "pivot": round(pivot, 4),
         "support": round(support, 4),
+        "stop": round(stop, 4),
         "pivot_date": final.high_date,
         "support_date": final.low_date,
         "risk_pct": round(risk_pct, 2),
@@ -382,10 +386,12 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
     metrics["high_since_support"] = round(high_since_support, 4)
     metrics["pivot_broken"] = bool(pivot_broken)
 
-    # The entry has to stay within the risk ceiling measured from the stop, so
-    # there is a highest price still worth paying: buy between the pivot and
-    # this, never above it.
-    metrics["max_entry"] = round(support * (1.0 + max_risk / 100.0), 4)
+    # Chasing a breakout gives up the move you were positioning for, so there
+    # is a highest price still worth paying: buy between the pivot and this,
+    # never above it.
+    metrics["max_entry"] = round(
+        pivot * (1.0 + float(v.get("max_entry_above_pivot_pct", 5.0)) / 100.0), 4
+    )
 
     # Which of the preferred levels this base meets, for the app to colour.
     base_bars = metrics["base_length_bars"]
