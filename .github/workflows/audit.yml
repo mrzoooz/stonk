@@ -39,6 +39,12 @@ jobs:
         if: github.event.inputs.explain != ''
         run: python -m screener.run --no-fetch --explain "${{ github.event.inputs.explain }}"
 
+      - name: Verify every base against the rules
+        if: github.event.inputs.explain == ''
+        run: python tools/verify_screen.py
+        env:
+          PYTHONPATH: .
+
       - name: Audit the cache
         if: github.event.inputs.explain == ''
         run: python tools/audit_data.py
