@@ -123,12 +123,15 @@ A is not the minimum of what follows it, so it never qualifies.
 
 What the screen then verifies is that the pattern is genuinely *contracting*:
 
-- each T is at most 85% as deep as the one before it (`vcp.contraction_shrink_factor`)
+- each T is narrower than the one before it (`vcp.contraction_shrink_factor`)
 - average volume falls from each T to the next (`vcp.require_volume_contraction`)
 - the final T is tight — within `vcp.final_depth_min_pct`–`final_depth_max_pct`
 - volume has dried up: the **final contraction's own** average volume is under
   85% of the 50-day average as it stood at that contraction's low
   (`vcp.dryup_ratio`)
+- the first contraction is under 50% deep (`vcp.max_first_depth_pct`) - a fall
+  beyond that says stage 4 has not finished and this is not a base
+- the base has run long enough to mean something (`vcp.min_base_bars`)
 - the final low has held for at least a few sessions (`vcp.min_bars_since_final_low`)
 - price is still near the pivot rather than extended away from it
 
@@ -196,6 +199,23 @@ Stage 2 template is actually judged on. Switching them to 50/150/200-*week*
 averages would draw something the screen never tested.
 
 ---
+
+### Required versus preferred
+
+Several rules have a level that rejects and a level that is merely better. The
+screen enforces the first and reports the second, so a setup that is admissible
+but not ideal is visible as such rather than either hidden or presented as
+equal:
+
+| Rule | Rejected beyond | Preferred |
+|------|-----------------|-----------|
+| Risk (pivot to support) | 8% | 5% |
+| Reward:risk | below 2 | 3 or better |
+| Consolidations | fewer than 2 | 3 |
+| Base duration | under 20 sessions | ~3 months (63) |
+| First contraction | deeper than 50% | 30% |
+| Final contraction | deeper than 8% | 5% |
+| Each T versus the last | not narrower | at most half |
 
 ## Tuning
 

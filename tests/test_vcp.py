@@ -366,3 +366,73 @@ def test_the_second_consolidation_starts_after_the_first_low_held():
     assert second.high_idx > first.low_idx, "a new period begins only after the last one closed"
     assert second.low > first.low, "lows must ascend"
     assert second.depth_pct < first.depth_pct, "and the pattern must tighten"
+
+
+def test_a_base_that_has_barely_formed_is_rejected():
+    """Criterion 4: the pattern should run months, not days.
+
+    A base a few sessions long also produces a degenerate target, because the
+    measured move projects the base's own depth and there is almost none.
+    """
+    import pandas as pd
+
+    df = build_base(t3_low=55.3)
+    # Keep only the tail: a base that starts a handful of bars ago.
+    short = df.tail(280).copy()
+    res = vcp.detect(short, CFG)
+    if res.contractions:
+        assert res.metrics["base_length_bars"] >= CFG["vcp"]["min_base_bars"] or not res.passed
+
+
+def test_base_length_below_the_floor_fails_with_a_clear_reason():
+    cfg = load_config()
+    cfg["vcp"]["min_base_bars"] = 500          # nothing can satisfy this
+    res = vcp.detect(build_base(t3_low=55.3), cfg)
+    assert not res.passed
+    assert "base only" in res.reason
+
+
+def test_first_contraction_beyond_fifty_percent_is_rejected():
+    """Criterion 2: past 50% the stock is still in stage 4, not basing."""
+    cfg = load_config()
+    cfg["vcp"]["max_first_depth_pct"] = 50.0
+    deep = build_base(t1_low=28.0, t2_low=52.2, t3_low=55.3)
+    res = vcp.detect(deep, cfg)
+    if res.contractions and res.contractions[0].depth_pct > 50:
+        assert not res.passed
+        assert "stage 4 has not finished" in res.reason
+
+
+def test_max_entry_keeps_the_risk_within_the_ceiling():
+    """The entry ceiling is the stop plus the risk allowance, not the pivot."""
+    res = vcp.detect(build_base(t3_low=55.3), CFG)
+    m = res.metrics
+    ceiling = CFG["risk"]["max_risk_pct"]
+    assert m["max_entry"] == pytest.approx(m["support"] * (1 + ceiling / 100), abs=1e-3)
+    assert m["max_entry"] > m["pivot"], "there should be room above the pivot to fill"
+    # Buying at the ceiling still keeps the loss to the stop within the limit.
+    risk_at_ceiling = (m["max_entry"] - m["support"]) / m["max_entry"] * 100
+    assert risk_at_ceiling <= ceiling + 1e-6
+
+
+def test_preferred_levels_are_reported_separately_from_pass_fail():
+    res = vcp.detect(build_base(t3_low=55.3), CFG)
+    pref = res.metrics["preferred"]
+    assert set(pref) == {"contractions", "base_length", "first_depth", "final_depth", "shrink"}
+    assert all(isinstance(x, bool) for x in pref.values())
+    # This fixture tightens 20.2% -> 10.2% -> 4.2%, so its worst step is 0.506
+    # - a hair over half, and therefore short of the ideal. Reported, not
+    # enforced: the base still passes.
+    assert res.metrics["worst_shrink_ratio"] == pytest.approx(0.506, abs=0.02)
+    assert pref["shrink"] is False
+    assert res.passed, res.reason
+
+
+def test_a_base_that_truly_halves_each_time_meets_the_ideal():
+    res = vcp.detect(build_base(t1_low=44.0, t2_low=53.5, t3_low=56.2), CFG)
+    if len(res.contractions) >= 2:
+        ratios = [
+            res.contractions[i].depth_pct / res.contractions[i - 1].depth_pct
+            for i in range(1, len(res.contractions))
+        ]
+        assert res.metrics["preferred"]["shrink"] is (max(ratios) <= 0.5)

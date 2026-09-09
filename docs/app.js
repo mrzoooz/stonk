@@ -427,6 +427,7 @@
     var L = limits();
     var cells = [
       ['Buy above', num(v.pivot), ''],
+      ['Up to', num(v.max_entry), ''],
       ['Stop', num(v.support), ''],
       ['Target', num(v.target), ''],
       ['Risk', pct(v.risk_pct), riskClass(v.risk_pct)],
@@ -509,7 +510,20 @@
        v.high_since_support == null ? '--'
          : 'high since low ' + num(v.high_since_support) + ' vs pivot ' + num(v.pivot)],
       ['Price still near the pivot', vcp.status === 'actionable',
-       pct(v.distance_to_pivot_pct) + ' from pivot']
+       pct(v.distance_to_pivot_pct) + ' from pivot'],
+      ['Base has run long enough',
+       v.base_length_bars != null &&
+         v.base_length_bars >= (cfg.preferred_base_bars || 63),
+       v.base_length_bars == null ? '--'
+         : v.base_length_bars + ' sessions (~' + (v.base_length_bars / 21).toFixed(1) +
+           ' months), want ' + Math.round((cfg.preferred_base_bars || 63) / 21) + '+'],
+      ['Each T at most half the last',
+       !!(v.preferred && v.preferred.shrink),
+       v.worst_shrink_ratio == null ? '--'
+         : 'worst step ' + v.worst_shrink_ratio.toFixed(2) + ' of the previous'],
+      ['First T within ' + pct(cfg.preferred_first_depth_pct || 30, 0),
+       !!(v.preferred && v.preferred.first_depth),
+       pct(v.first_depth_pct)]
     ];
     el['d-vcp'].innerHTML = rules.map(checkRow).join('');
   }

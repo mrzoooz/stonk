@@ -90,7 +90,17 @@ vcp:
   zigzag_pct: 3.0
   min_swing_bars: 3
 
+  # Criterion 3: at least T2, better T3. More consolidations means less supply
+  # left and a stronger move out.
   min_contractions: 2
+  preferred_contractions: 3
+
+  # Criterion 4: the pattern should run more than about three months from the
+  # start of the first consolidation - the longer the shakeout, the more
+  # thoroughly sellers have left. The hard floor only rejects bases too short
+  # to mean anything; the preferred level is the three months.
+  min_base_bars: 20
+  preferred_base_bars: 63
   # How many consolidations may make up one base. Bases with more than three
   # Ts are common; this only limits how many are reported, and the tightest
   # (final) one always supplies the pivot.
@@ -104,7 +114,12 @@ vcp:
   # the first of those pairs is rejected and the base reads as two
   # consolidations instead of three, so 0.85 was stricter than the pattern it
   # was meant to describe.
+  #
+  # Criterion 5 states the ideal as each contraction being at most half the
+  # previous. That is an ideal, not a requirement - the reference base itself
+  # only manages 0.90 on its first step - so it is reported, not enforced.
   contraction_shrink_factor: 0.95
+  preferred_shrink_factor: 0.5
 
   # "Price never goes below B again" - each consolidation low must sit at or
   # above the previous one.
@@ -113,9 +128,16 @@ vcp:
 
   # T1 is allowed to be deep, the final T must be tight (the ~4-8% pivot zone,
   # widened slightly so real setups are not lost on rounding).
-  max_first_depth_pct: 35.0
+  # Criterion 2: the first consolidation may not exceed 50%, ideally 30%. A
+  # fall beyond 50% suggests stage 4 has not finished and this is not a base.
+  max_first_depth_pct: 50.0
+  preferred_first_depth_pct: 30.0
+  # Criterion 7: the last consolidation's swing is essentially the risk, so it
+  # tracks the risk ceiling exactly - (pivot - support) / pivot is the same
+  # number as the final contraction's depth.
   final_depth_min_pct: 2.0
-  final_depth_max_pct: 12.0
+  final_depth_max_pct: 8.0
+  preferred_final_depth_pct: 5.0
 
   # Volume must fall from one contraction to the next (high -> medium -> low).
   require_volume_contraction: true

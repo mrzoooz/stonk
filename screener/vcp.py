@@ -291,8 +291,19 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
         fails.append(
             f"only {len(run)} contraction(s), need {int(v.get('min_contractions', 2))}"
         )
-    if first.depth_pct > float(v.get("max_first_depth_pct", 35.0)):
-        fails.append(f"T1 too deep ({first.depth_pct:.1f}%)")
+    if first.depth_pct > float(v.get("max_first_depth_pct", 50.0)):
+        fails.append(
+            f"T1 too deep ({first.depth_pct:.1f}%) - a fall past "
+            f"{float(v.get('max_first_depth_pct', 50.0)):.0f}% means stage 4 has not finished"
+        )
+
+    # A base that has barely formed carries no information, and its measured
+    # move is degenerate because the base has almost no depth to project.
+    min_bars = int(v.get("min_base_bars", 20))
+    if metrics["base_length_bars"] < min_bars:
+        fails.append(
+            f"base only {metrics['base_length_bars']} sessions, need {min_bars}"
+        )
     lo_f = float(v.get("final_depth_min_pct", 2.0))
     hi_f = float(v.get("final_depth_max_pct", 12.0))
     if not (lo_f <= final.depth_pct <= hi_f):
@@ -335,6 +346,28 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
 
     metrics["high_since_support"] = round(high_since_support, 4)
     metrics["pivot_broken"] = bool(pivot_broken)
+
+    # The entry has to stay within the risk ceiling measured from the stop, so
+    # there is a highest price still worth paying: buy between the pivot and
+    # this, never above it.
+    metrics["max_entry"] = round(support * (1.0 + max_risk / 100.0), 4)
+
+    # Which of the preferred levels this base meets, for the app to colour.
+    base_bars = metrics["base_length_bars"]
+    shrink_ratios = [
+        run[i].depth_pct / run[i - 1].depth_pct
+        for i in range(1, len(run))
+        if run[i - 1].depth_pct > 0
+    ]
+    metrics["preferred"] = {
+        "contractions": len(run) >= int(v.get("preferred_contractions", 3)),
+        "base_length": base_bars >= int(v.get("preferred_base_bars", 63)),
+        "first_depth": first.depth_pct <= float(v.get("preferred_first_depth_pct", 30.0)),
+        "final_depth": final.depth_pct <= float(v.get("preferred_final_depth_pct", 5.0)),
+        "shrink": bool(shrink_ratios) and max(shrink_ratios)
+                  <= float(v.get("preferred_shrink_factor", 0.5)),
+    }
+    metrics["worst_shrink_ratio"] = round(max(shrink_ratios), 3) if shrink_ratios else None
 
     if status == "broke_out":
         fails.append(
