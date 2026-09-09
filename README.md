@@ -115,6 +115,12 @@ everything that follows its high, no low in the sequence is ever undercut later 
 which is exactly the condition the brief describes. The same construction forces
 descending highs and ascending lows, i.e. the wedge shape of a VCP.
 
+A low that is later undercut does not end anything. In the reference material's
+Amgen example, price falls to A, bounces, then breaks below A, and only reaches
+its holding low at B: A is "a mid-decline rest", and the whole stretch is a
+single consolidation whose low is B. That falls straight out of the rule above -
+A is not the minimum of what follows it, so it never qualifies.
+
 What the screen then verifies is that the pattern is genuinely *contracting*:
 
 - each T is at most 85% as deep as the one before it (`vcp.contraction_shrink_factor`)

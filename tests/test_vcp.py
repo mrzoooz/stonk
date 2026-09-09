@@ -315,3 +315,54 @@ def test_the_pivot_of_a_stepped_base_is_the_final_high():
     assert res.metrics["pivot"] == pytest.approx(final.high, abs=1e-3)
     # The pivot must be the most recent high, not the tallest earlier one.
     assert res.metrics["pivot"] == pytest.approx(max(c.high for c in res.contractions), abs=1e-3)
+
+
+def build_base_with_broken_intermediate_low(seed=31):
+    """One consolidation containing a low that gets undercut.
+
+    From the training material's Amgen example: price falls to A, bounces,
+    then breaks below A, and only later reaches B and holds. A is "a mid-decline
+    rest", not the end of anything - the whole stretch is a single consolidation
+    whose low is B.
+    """
+    closes, vols = [], []
+
+    def push(vals, vol):
+        closes.extend(vals)
+        vols.extend([vol] * len(vals))
+
+    push(leg(45, 70.0, 200), 1_200_000)
+    # --- consolidation 1: A is undercut, B holds -------------------------
+    push(leg(70.0, 66.0, 8), 2_200_000)      # down to A = 66
+    push(leg(66.0, 68.2, 6), 1_800_000)      # bounce off A
+    push(leg(68.2, 64.0, 7), 2_000_000)      # breaks below A - still the same period
+    push(leg(64.0, 67.0, 6), 1_700_000)      # bounce
+    push(leg(67.0, 63.0, 7), 1_900_000)      # down to B = 63
+    push(leg(63.0, 72.0, 18), 1_500_000)     # rebounds, never revisits B
+    # --- consolidation 2 --------------------------------------------------
+    push(leg(72.0, 68.4, 9), 1_100_000)
+    push(leg(68.4, 71.5, 10), 700_000)
+    closes.append(71.6)
+    vols.append(600_000)
+    return _bars(closes, vols, wiggle=0.0012, seed=seed)
+
+
+def test_a_low_that_is_undercut_does_not_end_a_consolidation():
+    """A and B belong to one consolidation; only B, which held, closes it."""
+    res = vcp.detect(build_base_with_broken_intermediate_low(), CFG)
+    lows = [round(c.low, 1) for c in res.contractions]
+
+    assert len(res.contractions) == 2, f"expected two consolidations, got {lows}"
+    # B (~63), not A (~66), is the first consolidation's low.
+    assert res.contractions[0].low == pytest.approx(63.0, abs=0.6), lows
+    assert all(abs(low - 66.0) > 1.0 for low in lows), f"A leaked in as a low: {lows}"
+    # And its high is the peak that started the whole stretch, not the bounce.
+    assert res.contractions[0].high == pytest.approx(70.0, abs=0.6)
+
+
+def test_the_second_consolidation_starts_after_the_first_low_held():
+    res = vcp.detect(build_base_with_broken_intermediate_low(), CFG)
+    first, second = res.contractions
+    assert second.high_idx > first.low_idx, "a new period begins only after the last one closed"
+    assert second.low > first.low, "lows must ascend"
+    assert second.depth_pct < first.depth_pct, "and the pattern must tighten"
