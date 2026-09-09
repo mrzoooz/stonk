@@ -7,6 +7,7 @@
   var STAR_KEY = 'vcp.starred';
   var CALC_KEY = 'vcp.calc';
   var CHART_KEY = 'vcp.chart';
+  var MISSED_KEY = 'vcp.hideMissed';
 
   var state = {
     data: null,
@@ -18,7 +19,8 @@
     months: 6,
     interval: 'daily',
     collapsed: false,
-    expanded: false
+    expanded: false,
+    hideMissed: true
   };
 
   // Roughly how many bars make up a month at each interval.
@@ -30,7 +32,8 @@
    'd-vcp', 'd-stage2', 'acct', 'riskpct', 'calc-out', 'foot-note', 'range-row',
    'chart-wrap', 'calc-card', 'interval-row', 'chart-controls',
    'chart-panel', 'chart-collapse', 'chart-expand', 'chart-body',
-   'd-price', 'd-change', 'chart-price', 'chart-title'
+   'd-price', 'd-change', 'chart-price', 'chart-title',
+   'hide-missed', 'hide-missed-wrap'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // ------------------------------------------------------------- storage
@@ -145,6 +148,13 @@
   function cmpDesc(a, b) { if (a == null) return 1; if (b == null) return -1; return b - a; }
 
   function filterRows(rows) {
+    // A name trading above its pivot is a trade that already went; hiding them
+    // keeps the list to what is still entrable.
+    if (state.hideMissed) {
+      rows = rows.filter(function (r) {
+        return !(r.vcp && r.vcp.status === 'broke_out');
+      });
+    }
     var q = state.query.trim().toUpperCase();
     if (!q) return rows;
     return rows.filter(function (r) {
@@ -215,7 +225,13 @@
 
   function render() {
     if (!state.data) return;
-    var rows = sortRows(filterRows(rowsFor(state.tab)));
+    var all = rowsFor(state.tab);
+    var rows = sortRows(filterRows(all));
+    var missed = all.filter(function (r) {
+      return r.vcp && r.vcp.status === 'broke_out';
+    }).length;
+    el['hide-missed-wrap'].hidden = missed === 0 && !state.hideMissed;
+    el['hide-missed-wrap'].title = missed + ' name(s) here have already broken their pivot';
     el.list.innerHTML = rows.map(cardHTML).join('');
     el.empty.hidden = rows.length > 0;
     if (!rows.length) {
@@ -577,6 +593,11 @@
   });
 
   el.search.addEventListener('input', function () { state.query = el.search.value; render(); });
+  el['hide-missed'].addEventListener('change', function () {
+    state.hideMissed = el['hide-missed'].checked;
+    try { localStorage.setItem(MISSED_KEY, state.hideMissed ? '1' : '0'); } catch (e) {}
+    render();
+  });
   el.sort.addEventListener('change', function () { state.sort = el.sort.value; render(); });
   el.refresh.addEventListener('click', function () { load(true); });
   el.back.addEventListener('click', closeDetail);
@@ -639,6 +660,12 @@
       b.classList.toggle('is-active', b.dataset[attr] === value);
     });
   }
+
+  try {
+    var savedMissed = localStorage.getItem(MISSED_KEY);
+    if (savedMissed !== null) state.hideMissed = savedMissed === '1';
+  } catch (e) {}
+  el['hide-missed'].checked = state.hideMissed;
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

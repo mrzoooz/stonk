@@ -91,7 +91,10 @@ vcp:
   min_swing_bars: 3
 
   min_contractions: 2
-  max_contractions: 6
+  # How many consolidations may make up one base. Bases with more than three
+  # Ts are common; this only limits how many are reported, and the tightest
+  # (final) one always supplies the pivot.
+  max_contractions: 8
 
   # Each contraction must be at most this fraction of the previous one's depth.
   # 1.0 = "merely narrower"; 0.85 = "meaningfully narrower".

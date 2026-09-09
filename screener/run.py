@@ -340,6 +340,13 @@ def main(argv: list[str] | None = None) -> int:
             "price_steps_flagged": adjusted_symbols,
         },
         "watch_reasons": summarise_reasons(watch),
+        # How many consolidations the detected bases actually have, so the cap
+        # can be checked against reality rather than assumed.
+        "contraction_counts": dict(sorted(Counter(
+            (r.get("vcp") or {}).get("metrics", {}).get("contraction_count")
+            for r in ready + watch
+            if (r.get("vcp") or {}).get("metrics", {}).get("contraction_count")
+        ).items())),
         "config": {
             "max_risk_pct": cfg.get_path("risk.max_risk_pct"),
             "preferred_max_risk_pct": cfg.get_path("risk.preferred_max_risk_pct"),
@@ -367,6 +374,7 @@ def main(argv: list[str] | None = None) -> int:
                 "as_of": payload["as_of"],
                 "counts": payload["counts"],
                 "watch_reasons": payload["watch_reasons"],
+                "contraction_counts": payload["contraction_counts"],
                 "elapsed_sec": round(time.time() - started, 1),
             },
             indent=2,

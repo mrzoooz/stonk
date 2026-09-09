@@ -221,3 +221,36 @@ def test_recent_volume_is_reported_but_not_decisive():
     # ...but the contraction itself was quiet, and that is what decides.
     assert res.metrics["volume_dryup_ratio"] < CFG["vcp"]["dryup_ratio"]
     assert "dry-up" not in res.reason
+
+
+def test_a_long_base_keeps_its_most_recent_contractions():
+    """Walking must reach the present.
+
+    The walk used to halt at a fixed count, so a base with many cycles was
+    abandoned part-way and the "final" contraction - the one that supplies the
+    pivot - came from the middle of the base instead of the end.
+    """
+    import numpy as np
+    from tests.synth import _bars
+
+    closes, vols = [], []
+    closes.extend(leg(20, 40, 150))
+    vols.extend([1_000_000] * 150)
+    # Fifteen shrinking swings, far more than the old cap of twelve.
+    level, swing = 40.0, 6.0
+    for _ in range(15):
+        closes.extend(leg(level, level - swing, 7))
+        closes.extend(leg(level - swing, level + 0.2, 7))
+        vols.extend([900_000] * 14)
+        level += 0.2
+        swing *= 0.88
+    df = _bars(closes, vols, wiggle=0.001, seed=11)
+
+    res = vcp.detect(df, CFG)
+    assert res.contractions, "a base this busy must yield contractions"
+    final = res.contractions[-1]
+    # The final contraction has to sit at the end of the series, not mid-base.
+    assert final.low_idx > len(df) - 40, (
+        f"final contraction at bar {final.low_idx} of {len(df)} - walk stopped early"
+    )
+    assert res.metrics["pivot"] == pytest.approx(final.high, abs=1e-3)

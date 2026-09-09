@@ -29,8 +29,12 @@ import pandas as pd
 
 # Anything shallower than this is noise, not a consolidation.
 MIN_MEANINGFUL_DEPTH_PCT = 1.0
-# Hard cap on how many raw cycles we walk before selecting the trailing run.
-MAX_RAW_CONTRACTIONS = 12
+# Safety bound only. The walk terminates on its own because each cycle consumes
+# bars and the high index strictly increases, so this exists purely to stop a
+# pathological input looping - it must stay well above any real base's cycle
+# count, because halting the walk early would leave the most recent cycles
+# unseen and hand back a stale pivot from the middle of the base.
+MAX_RAW_CONTRACTIONS = 200
 
 
 @dataclass
@@ -99,7 +103,7 @@ def _walk_cycles(
 
     high_idx = int(np.argmax(highs[start : search_end + 1])) + start
 
-    while len(out) < MAX_RAW_CONTRACTIONS:
+    while len(out) < MAX_RAW_CONTRACTIONS:  # bound is a guard, not a limit
         seg_start = high_idx + 1
         # Need room for a decline and for the low to then prove it holds.
         if seg_start + min_swing_bars > end:
