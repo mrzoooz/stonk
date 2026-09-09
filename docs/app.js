@@ -533,14 +533,21 @@
            v.widening_pauses[0].date +
            (v.widening_pauses.length > 1
              ? ' (+' + (v.widening_pauses.length - 1) + ' more)' : '')],
+      // Only meaningful once the scan publishes the field. A bundle from
+      // before it existed says nothing about volume, so the row is dropped
+      // below rather than shown as a tick nobody earned.
       ['Volume fell across the base',
-       !v.volume_rose_pauses || !v.volume_rose_pauses.length,
-       !v.volume_rose_pauses || !v.volume_rose_pauses.length ? 'declining'
+       v.volume_rose_pauses != null && !v.volume_rose_pauses.length,
+       v.volume_rose_pauses == null ? '--'
+         : !v.volume_rose_pauses.length ? 'declining'
          : v.volume_rose_pauses.length + ' pause(s) traded heavier than the next'],
       ['First T within ' + pct(cfg.preferred_first_depth_pct || 30, 0),
        !!(v.preferred && v.preferred.first_depth),
        pct(v.first_depth_pct)]
     ];
+    if (v.volume_rose_pauses == null) {
+      rules = rules.filter(function (r) { return r[0].indexOf('Volume fell') !== 0; });
+    }
     el['d-vcp'].innerHTML = rules.map(checkRow).join('');
   }
 
