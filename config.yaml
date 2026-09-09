@@ -115,10 +115,15 @@ vcp:
   # consolidations instead of three, so 0.85 was stricter than the pattern it
   # was meant to describe.
   #
+  # 1.0 means "narrower than the last", which is what the rule says. 0.95 was
+  # stricter than that and rejected genuine sequences on a hair: KMX contracts
+  # 8.06% -> 7.83%, a ratio of 0.971, and at 0.95 that consolidation was
+  # dropped from the base entirely.
+  #
   # Criterion 5 states the ideal as each contraction being at most half the
   # previous. That is an ideal, not a requirement - the reference base itself
   # only manages 0.90 on its first step - so it is reported, not enforced.
-  contraction_shrink_factor: 0.95
+  contraction_shrink_factor: 1.0
   preferred_shrink_factor: 0.5
 
   # "Price never goes below B again" - each consolidation low must sit at or

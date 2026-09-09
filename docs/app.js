@@ -444,6 +444,11 @@
         ' you want. The stop is wider than ideal, so size the position down or wait' +
         ' for a tighter pivot.');
     }
+    if (v.perfect_vcp === false) {
+      caveats.push('A pause inside the base was wider than the one after it, so the ' +
+        'contraction is not clean. The reference calls that "not a perfect VCP" rather ' +
+        'than not a VCP - the pattern stands, but it is a weaker one.');
+    }
     if (v.reward_risk != null && Number(v.reward_risk.toFixed(1)) < L.okRR) {
       caveats.push('Reward:risk of 1 : ' + v.reward_risk.toFixed(1) + ' is below the 1 : ' +
         L.okRR + ' you want. It clears the 1 : ' + L.minRR + ' minimum, but the payoff is thin.');
@@ -521,6 +526,11 @@
        !!(v.preferred && v.preferred.shrink),
        v.worst_shrink_ratio == null ? '--'
          : 'worst step ' + v.worst_shrink_ratio.toFixed(2) + ' of the previous'],
+      ['No widening pause in the base',
+       v.perfect_vcp !== false,
+       !v.widening_pauses || !v.widening_pauses.length ? 'clean sequence'
+         : v.widening_pauses.length + ' wider pause(s), e.g. ' +
+           pct(v.widening_pauses[0].depth_pct) + ' on ' + v.widening_pauses[0].date],
       ['First T within ' + pct(cfg.preferred_first_depth_pct || 30, 0),
        !!(v.preferred && v.preferred.first_depth),
        pct(v.first_depth_pct)]

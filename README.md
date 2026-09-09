@@ -123,7 +123,12 @@ A is not the minimum of what follows it, so it never qualifies.
 
 What the screen then verifies is that the pattern is genuinely *contracting*:
 
-- each T is narrower than the one before it (`vcp.contraction_shrink_factor`)
+- each T is narrower than the one before it (`vcp.contraction_shrink_factor`).
+  A pause that is *wider* than the one after it does not end the base - the
+  reference is explicit that this is "not a perfect VCP" rather than not a VCP,
+  since after a shakeout the stock keeps rising and another shakeout may
+  follow. The sequence continues past it and the base is reported as imperfect,
+  in amber, rather than the imperfection being silently stepped over
 - average volume falls from each T to the next (`vcp.require_volume_contraction`)
 - the final T is tight — within `vcp.final_depth_min_pct`–`final_depth_max_pct`
 - volume has dried up: the **final contraction's own** average volume is under

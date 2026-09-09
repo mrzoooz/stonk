@@ -155,8 +155,15 @@ def _walk_cycles(
     return out
 
 
-def _select_run(cycles: list[Contraction], cfg: dict) -> list[Contraction]:
-    """Pick the longest trailing run whose depth (and volume) keeps shrinking."""
+def _select_run(
+    cycles: list[Contraction], cfg: dict, skipped: list[Contraction] | None = None
+) -> list[Contraction]:
+    """Pick the longest trailing run whose depth (and volume) keeps shrinking.
+
+    `skipped` collects the pauses passed over on the way back - each one a
+    widening step, and the reason a base is imperfect.
+    """
+    skipped = skipped if skipped is not None else []
     if not cycles:
         return []
     shrink = float(cfg.get("contraction_shrink_factor", 0.85))
@@ -169,18 +176,19 @@ def _select_run(cycles: list[Contraction], cfg: dict) -> list[Contraction]:
     run = [cycles[-1]]
     for prev in reversed(cycles[:-1]):
         nxt = run[0]
-        # A cycle shallower than the one after it is not the previous T - it is
-        # a wobble inside the advance between two consolidations. Skip it and
-        # keep looking further back, rather than treating it as the end of the
-        # pattern: stopping there discards every genuine consolidation before
-        # it, which is how a 14% base could be reduced to the 7% pullback that
-        # followed a five-day dip.
+        # A pause shallower than the one after it is a widening step. The
+        # reference material calls that "not a perfect VCP" rather than not a
+        # VCP at all - after a shakeout the stock keeps rising and another
+        # shakeout may follow - so the sequence continues past it and the
+        # imperfection is recorded instead of being silently stepped over.
         if nxt.depth_pct > prev.depth_pct * shrink:
+            skipped.append(prev)
             continue
         if higher_lows and nxt.low < prev.low * (1.0 - tol):
-            continue
+            break
         if check_vol and np.isfinite(prev.avg_volume) and np.isfinite(nxt.avg_volume):
             if nxt.avg_volume > prev.avg_volume * vol_shrink:
+                skipped.append(prev)
                 continue
         run.insert(0, prev)
         if len(run) >= max_n:
@@ -222,7 +230,8 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
     if not cycles:
         return VCPResult(False, "none", "no completed consolidation in the base window")
 
-    run = _select_run(cycles, v)
+    skipped: list[Contraction] = []
+    run = _select_run(cycles, v, skipped)
     first, final = run[0], run[-1]
 
     pivot = final.high
@@ -374,6 +383,23 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
                   <= float(v.get("preferred_shrink_factor", 0.5)),
     }
     metrics["worst_shrink_ratio"] = round(max(shrink_ratios), 3) if shrink_ratios else None
+
+    # Only a pause on the same scale as its neighbours is a widening step; a
+    # 2% blip between two 8% consolidations is noise, not an imperfection.
+    def _comparable(c: Contraction) -> bool:
+        after = [x for x in run if x.high_idx > c.high_idx]
+        return bool(after) and c.depth_pct >= after[0].depth_pct * 0.5
+
+    inside = [
+        c for c in skipped
+        if first.high_idx <= c.high_idx <= final.low_idx and _comparable(c)
+    ]
+    metrics["widening_pauses"] = [
+        {"date": c.high_date, "depth_pct": round(c.depth_pct, 2)} for c in inside
+    ]
+    # "If the second consolidation has more volatility than the previous one,
+    # it's not a perfect VCP." Recorded, not disqualifying.
+    metrics["perfect_vcp"] = not inside
 
     if status == "broke_out":
         fails.append(
