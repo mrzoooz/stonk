@@ -436,46 +436,80 @@
       : '<span class="rs-num ' + rsClass(rating) + '">' + rating +
         '</span><span class="rs-cap">RS RATING</span>';
 
-    el['rs-explain-body'].innerHTML = rsExplainer(rating, bench, beating, atHigh);
+    el['rs-explain-body'].innerHTML = chartExplainer(rating, bench, beating, atHigh);
   }
 
-  function rsExplainer(rating, bench, beating, atHigh) {
-    var band = rating == null ? null
-      : rating >= 70 ? 'strong' : rating >= 50 ? 'middling' : 'weak';
-    var ratingLine = rating == null
-      ? '<p>No RS Rating - this stock lacks the full year of history the ranking needs.</p>'
-      : '<p><strong>RS Rating ' + rating + '</strong> means it outperformed <strong>' +
-        rating + '% of every stock in the scan</strong> over the past year, with the most ' +
-        'recent quarter counted double so a stock that has just started moving ranks above ' +
-        'one coasting on old gains. ' +
-        (band === 'strong'
-          ? 'That is the range worth owning - leaders live at 80-99.'
-          : band === 'middling'
-          ? 'That is middling: it is not being sold, but the market is not choosing it either.'
-          : 'That is weak - the market is actively preferring other stocks.') + '</p>';
+  /* What every mark on the chart indicates - a legend in sentences, not a
+     set of instructions. It reads off this stock's own numbers so the
+     description is of the chart in front of you rather than of VCPs in
+     general. */
+  function chartExplainer(rating, bench, beating, atHigh) {
+    var v = (state.current && state.current.vcp && state.current.vcp.metrics) || {};
+    var cs = (state.current && state.current.vcp && state.current.vcp.contractions) || [];
+    var out = [];
 
-    return ratingLine +
-      '<p><strong>The RS line</strong> is this stock priced in units of ' + bench +
-      '. Its level means nothing on its own - only its direction. Rising means the stock is ' +
-      'gaining ground on the market, falling means it is losing ground, and it can rise even ' +
-      'while the price falls, if the stock is falling less than everything else.</p>' +
-      '<p><strong>Blue</strong> is the line above its 21-day average - the strength is ' +
-      'holding. <strong>Purple</strong> is below it - the edge is fading. <strong>Orange' +
-      '</strong> is that average.</p>' +
-      '<p>The two answer different questions. The rating is <em>how strong right now</em>, ' +
-      'ranked against everything else. The line is <em>has this been consistent, or was it ' +
-      'one spike?</em> A stock can hit RS 99 on a single news day and collapse; the line ' +
-      'would show the trend was weak all along.</p>' +
-      (atHigh
-        ? '<p class="rs-note">The line is at a new high for this window - the stock is ' +
-          'becoming more dominant over the market, which often precedes a move. It is a ' +
-          'reason to watch, not to buy: wait for the pivot breakout.</p>'
-        : !beating
-        ? '<p class="rs-note">The line is below its average. If the price has been rising ' +
-          'while this falls, institutions may be selling quietly into the strength.</p>'
-        : '') +
-      '<p class="rs-note">RS is one factor, never the trade on its own. A stock can carry ' +
-      'RS 99 while the broad market is in Stage 4, and then fall with everything else.</p>';
+    // --- the shaded bands
+    var depths = cs.map(function (c) { return c.depth_pct.toFixed(1) + '%'; });
+    var widened = cs.filter(function (c) { return c.widened; }).length;
+    var seq = depths.length ? ' Here they run ' + depths.join(' → ') + '.' : '';
+    out.push('<p><strong>The shaded T bands</strong> are consolidations: each one runs ' +
+      'from a high down to a low that price never traded below again. Their depths ' +
+      'indicate how much supply is still coming to market. A sequence that narrows ' +
+      'indicates sellers being used up - each dip finds buyers sooner than the last.' +
+      seq + '</p>');
+    if (widened) {
+      out.push('<p><strong>An amber band</strong> is deeper than the one before it, ' +
+        'indicating the base loosened at that point instead of tightening. ' +
+        (widened === 1 ? 'One step here does that.' : widened + ' steps here do that.') +
+        ' The reference calls that "not a perfect VCP" - the pattern still stands, it is ' +
+        'just a weaker one.</p>');
+    }
+
+    // --- the two levels
+    out.push('<p><strong>The red pivot line</strong> is the final consolidation\u2019s high' +
+      (v.pivot != null ? ' (' + num(v.pivot) + ')' : '') + ' - the level sellers have ' +
+      'repeatedly defended. <strong>The green support line</strong> is that same ' +
+      'consolidation\u2019s low' + (v.support != null ? ' (' + num(v.support) + ')' : '') +
+      ', the price the pattern says should not be revisited. The distance between them ' +
+      'is what the risk figure measures.</p>');
+
+    // --- RS rating
+    out.push(rating == null
+      ? '<p><strong>RS Rating</strong> indicates where a stock\u2019s 12-month performance ' +
+        'ranks against every stock in the scan. This one has no rating - it lacks the full ' +
+        'year of history the ranking needs.</p>'
+      : '<p><strong>RS Rating ' + rating + '</strong> indicates this stock outperformed ' +
+        rating + '% of every stock in the scan over the past year, with the most recent ' +
+        'quarter weighted double - so it reflects current leadership rather than gains made ' +
+        'months ago. It is a snapshot rank, not a trend.</p>');
+
+    // --- RS line
+    out.push('<p><strong>The RS line</strong> is this stock priced in units of ' + bench +
+      '. Its level carries no meaning; only its direction does. Rising indicates the stock ' +
+      'is gaining ground on the market, falling indicates it is losing ground - and it can ' +
+      'rise while the price falls, which indicates the stock is falling less than everything ' +
+      'else. <strong>Blue</strong> is the line above its 21-day average, indicating the ' +
+      'outperformance is holding; <strong>purple</strong> is below it, indicating the edge ' +
+      'is fading; <strong>orange</strong> is that average.</p>');
+
+    // --- what the two together indicate, keyed to this stock
+    var combo = 'Together they answer different questions: the rating is how strong this ' +
+      'stock is right now against the field, the line is whether that strength has been ' +
+      'consistent or was a single spike.';
+    if (rating != null && rating >= 70 && !beating) {
+      combo += ' Here the rating is high while the line sits below its average, which ' +
+        'indicates the ranking is being carried by past performance while the current edge ' +
+        'is fading.';
+    } else if (atHigh) {
+      combo += ' Here the line is at a new high for this window, indicating the stock is ' +
+        'outperforming by a widening margin.';
+    } else if (rating != null && rating < 50 && beating) {
+      combo += ' Here the line is above its average while the rating is weak, indicating ' +
+        'strength that is building but has not yet shown up in the 12-month ranking.';
+    }
+    out.push('<p>' + combo + '</p>');
+
+    return out.join('');
   }
 
   function setCollapsed(on) {
