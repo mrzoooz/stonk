@@ -66,3 +66,29 @@ show("nasdaq corporate actions - PRIM",
      lambda: get("https://api.nasdaq.com/api/company/PRIM/corporate-actions"))
 show("stockanalysis splits page json - PRIM",
      lambda: get("https://stockanalysis.com/api/symbol/s/prim/splits"))
+
+
+# ---------------------------------------------------------------------------
+# Decisive check: put the two sources side by side across a step date.
+#
+# If stockanalysis shows a smooth series where Nasdaq shows a 2:1 step, then
+# stockanalysis's close is already split-adjusted and switching to it removes
+# the whole problem. If both step, the move is real and PRIM genuinely halved.
+# ---------------------------------------------------------------------------
+def sa_around(sym, target, span=3):
+    url = f"https://stockanalysis.com/api/symbol/s/{sym.lower()}/history?range=5Y"
+    r = requests.get(url, headers=H, timeout=25)
+    node = r.json().get("data")
+    rows = node.get("data") if isinstance(node, dict) else node
+    rows = sorted(rows, key=lambda x: x["t"])
+    idx = [i for i, x in enumerate(rows) if x["t"] >= target]
+    if not idx:
+        return "date not in range"
+    i = idx[0]
+    window = rows[max(0, i - span):i + span]
+    return " | ".join(f"{x['t']} c={x['c']} a={x['a']}" for x in window)
+
+
+for sym, date_ in (("PRIM", "2026-05-06"), ("WVE", "2026-03-26"),
+                   ("ANPA", "2026-02-13"), ("HTCO", "2025-03-24")):
+    show(f"stockanalysis around {date_} - {sym}", lambda s=sym, d=date_: sa_around(s, d))
