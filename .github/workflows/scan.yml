@@ -90,7 +90,9 @@ jobs:
       # behind. Recording each scan's result keeps the repo active, so the
       # schedule stays alive, and gives a history of what ran when.
       - name: Record scan result
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: >-
+          github.event.inputs.dry_run != 'true' &&
+          (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -112,12 +114,13 @@ jobs:
       # Lets the deploy-only workflow republish the latest results without
       # re-running a scan.
       - name: Cache scan output
-        if: always()
+        if: always() && github.event.inputs.dry_run != 'true'
         uses: actions/cache/save@v4
         with:
           path: docs/data
           key: scan-output-${{ github.run_id }}
 
+      # A dry run reports here and nowhere else.
       - name: Summarise
         if: always()
         run: |
