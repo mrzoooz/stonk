@@ -20,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
+from screener import adjust
 from screener.config import ROOT, load_config
 from screener.fetch import PriceStore
 
@@ -118,17 +119,40 @@ def main() -> int:
             ratio_shaped.setdefault(sym, []).append(i)
             ok, observed = volume_corroborates(v, i, ratio)
             if ok:
+                # How far the event day's own volume sits above what the split
+                # alone would explain - the test that separates a split from a
+                # crash, and the one the scan applies.
+                med_before = float(np.median(v[max(0, i - 10 + 1):i + 1]))
+                spike = v[i + 1] / max(med_before * split, 1e-9)
                 suspects.setdefault(sym, []).append(
                     (df.index[i + 1].strftime("%Y-%m-%d"), round(prev[i], 2),
-                     round(cur[i], 2), round(ratio, 3), round(observed, 2))
+                     round(cur[i], 2), round(ratio, 3), round(observed, 2), round(spike, 2))
                 )
     print(f"    single-day moves over {args.jump_pct:.0f}%          : {big_moves}")
     print(f"    of those, near a whole split ratio : {sum(len(x) for x in ratio_shaped.values())}"
           f" across {len(ratio_shaped)} symbols")
     print(f"    AND corroborated by a volume step  : {len(suspects)} symbols")
-    for sym, hits in list(sorted(suspects.items()))[:15]:
-        d, a, b, r, vr = hits[0]
-        print(f"      {sym:8s} {d}  {a} -> {b}  price ratio {r}, volume ratio {vr}")
+
+    # Reconcile against what the scan will actually rescale. A candidate the
+    # scan declines is either a crash caught by the event-day volume test, or a
+    # sign the threshold is too tight - so print the number either way.
+    adjusted, declined = [], []
+    for sym in sorted(suspects):
+        df = store.load(sym, hist)
+        found = adjust.detect_splits(df)
+        (adjusted if found else declined).append(sym)
+
+    print(f"\n    the scan back-adjusts              : {len(adjusted)} symbols")
+    print(f"    candidates the scan declines       : {len(declined)} symbols")
+    print("      (spike = event-day volume over what the split alone explains;"
+          f" scan rejects above {adjust.EVENT_SPIKE_MAX})")
+    for sym in declined[:20]:
+        d, a, b, r, vr, spike = suspects[sym][0]
+        print(f"      {sym:8s} {d}  {a} -> {b}  ratio {r}, vol {vr}, spike {spike}")
+    print("    back-adjusted:")
+    for sym in adjusted[:20]:
+        d, a, b, r, vr, spike = suspects[sym][0]
+        print(f"      {sym:8s} {d}  {a} -> {b}  ratio {r}, vol {vr}, spike {spike}")
 
     # --- 3. did any of this reach the published results? -----------------
     results = Path(args.results)
