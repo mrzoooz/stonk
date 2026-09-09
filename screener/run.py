@@ -188,9 +188,12 @@ def main(argv: list[str] | None = None) -> int:
         log.info("fetch: %s", stats)
         store.prune(int(cfg.get("data", {}).get("history_days", 800)) + 60)
 
-    bench_df, bench_splits = adjmod.back_adjust(store.load(benchmark))
-    if bench_splits:
-        log.info("benchmark %s back-adjusted for %d split(s)", benchmark, len(bench_splits))
+    adjust_splits = bool(cfg.get("data", {}).get("adjust_splits", False))
+    bench_df = store.load(benchmark)
+    if adjust_splits:
+        bench_df, bench_splits = adjmod.back_adjust(bench_df)
+        if bench_splits:
+            log.info("benchmark %s back-adjusted for %d split(s)", benchmark, len(bench_splits))
     if bench_df.empty:
         log.error("no benchmark data for %s - beta and RS cannot be computed", benchmark)
         bench_close = pd.Series(dtype=float)
@@ -211,9 +214,12 @@ def main(argv: list[str] | None = None) -> int:
             df = store.load(sym, history_days)
             if df.empty:
                 continue
-            # The feed is unadjusted, so a split leaves a step change that
-            # corrupts every moving average until it falls out of the window.
-            df, splits = adjmod.back_adjust(df)
+            # Detection only by default: see data.adjust_splits in config.yaml
+            # for why inferring splits from price and volume is not safe.
+            if adjust_splits:
+                df, splits = adjmod.back_adjust(df)
+            else:
+                splits = adjmod.detect_splits(df)
             if splits:
                 adjusted_symbols += 1
                 log.debug("%s: back-adjusted %d split(s): %s", sym, len(splits),
@@ -222,7 +228,9 @@ def main(argv: list[str] | None = None) -> int:
                                   df, bench_close, cfg, market_date)
             if row and row["bucket"] != "rejected":
                 if splits:
-                    row["split_adjustments"] = [
+                    # Reported so a suspect series is visible, not silently
+                    # rewritten.
+                    row["price_steps"] = [
                         {"date": a.date, "factor": a.factor} for a in splits
                     ]
                 rows.append(row)
@@ -275,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
             "watch": len(watch),
             "stage2": len(stage_only),
             "errors": errors,
-            "split_adjusted": adjusted_symbols,
+            "price_steps_flagged": adjusted_symbols,
         },
         "config": {
             "max_risk_pct": cfg.get_path("risk.max_risk_pct"),

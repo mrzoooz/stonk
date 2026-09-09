@@ -257,15 +257,29 @@ on a real runner rather than by assumption:
   `assetclass=etf`. The SPY benchmark needs this, and without it beta and
   relative strength silently fail for every stock.
 
-**Splits are back-adjusted.** The feed is unadjusted, so a split leaves a step
+**Splits are detected and reported, not corrected.** The feed is unadjusted, so a split leaves a step
 change in the series: prices before it sit at the old scale. Left alone, a
 split 100 sessions ago moves a 200-day average by about 45% and breaks five of
-the Stage 2 checks, reads as a huge fake contraction, and inverts beta. A step
-is treated as a split only when the close ratio sits within 1.5% of a whole
-factor, share volume steps the opposite way by about that same factor (the
-volume feed is unadjusted too), and the event day is not a volume outlier -
-which is what separates a split from a crash. `tools/audit_data.py` reports
-what was found; on a recent run, 25 of ~6,000 symbols carried split steps.
+the Stage 2 checks, reads as a huge fake contraction, and inverts beta. Correcting this automatically turned out to be unsafe, and the attempt is
+worth recording. A split and a stock that halves on bad news move price by the
+same factor on elevated volume; price and volume alone cannot separate them.
+Checked against an independent source, HTCO's 2025-03-24 halving (47.00 ->
+23.50) still steps in that source's *adjusted* close - so it was a real 50%
+fall - yet the detector had rescaled it, fabricating a smooth chart for a stock
+that crashed.
+
+The two errors are not symmetric. A missed split makes a stock **fail** the
+screen: you lose a candidate. A fabricated adjustment can make a **collapsed
+stock pass** it. So `data.adjust_splits` defaults to false: steps are detected
+and reported on the row as `price_steps`, and nothing is rewritten.
+`tools/audit_data.py` lists what was found - on a recent run, 25 of ~6,000
+symbols carried split-shaped steps, of which 7 met the stricter bar.
+
+The real fix is a source that is already adjusted. stockanalysis.com serves
+five years with `range=5Y` (an earlier note here wrongly said six months, which
+was only its default window), and its close appears to be split-adjusted.
+Moving the primary source there would remove this problem rather than manage
+it, once it has been shown to hold up across the full universe.
 
 If a source starts rate-limiting mid-run the fetcher disables it and continues
 on the other. Re-run the **Probe data sources** workflow if a source ever

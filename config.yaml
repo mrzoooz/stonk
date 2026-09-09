@@ -26,6 +26,16 @@ data:
   # Calendar days of history to keep per symbol.
   history_days: 800
   benchmark: SPY
+  # Inferred split back-adjustment is OFF.
+  #
+  # It cannot be done safely from price and volume alone. Checked against an
+  # independent source, HTCO's 2025-03-24 halving (47.00 -> 23.50) still steps
+  # in that source's *adjusted* close, meaning it was a real 50% fall - yet the
+  # detector rescaled it, fabricating a smooth chart for a stock that crashed.
+  # A missed split makes a stock fail the screen; a fabricated one can make a
+  # collapsed stock pass it. The second error is far worse, so detection now
+  # only reports.
+  adjust_splits: false
   # Keyless sources that work from CI. Stooq serves a JavaScript browser
   # challenge and Yahoo blocks datacenter IP ranges, so neither is usable.
   providers: [nasdaq, stockanalysis]   # tried in order, per symbol
