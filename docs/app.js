@@ -531,6 +531,10 @@
        !v.widening_pauses || !v.widening_pauses.length ? 'clean sequence'
          : v.widening_pauses.length + ' wider pause(s), e.g. ' +
            pct(v.widening_pauses[0].depth_pct) + ' on ' + v.widening_pauses[0].date],
+      ['Volume fell across the base',
+       !v.volume_rose_pauses || !v.volume_rose_pauses.length,
+       !v.volume_rose_pauses || !v.volume_rose_pauses.length ? 'declining'
+         : v.volume_rose_pauses.length + ' pause(s) traded heavier than the next'],
       ['First T within ' + pct(cfg.preferred_first_depth_pct || 30, 0),
        !!(v.preferred && v.preferred.first_depth),
        pct(v.first_depth_pct)]

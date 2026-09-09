@@ -543,3 +543,33 @@ def test_a_tiny_blip_between_consolidations_is_not_called_an_imperfection():
     assert [round(c.depth_pct, 2) for c in skipped] == [2.15]
     # It is skipped, but it is not comparable in scale, so detect() will not
     # count it against the base. That filtering is asserted via detect below.
+
+
+def _c(idx, depth, vol, low):
+    """A bare contraction for exercising the selection walk directly."""
+    return vcp.Contraction(
+        index=0, high_idx=idx * 10, low_idx=idx * 10 + 5,
+        high_date=f"2025-0{idx}-01", low_date=f"2025-0{idx}-06",
+        high=100.0, low=low, depth_pct=depth, bars=5, avg_volume=vol,
+    )
+
+
+def test_widening_and_volume_rejections_are_reported_separately():
+    """A pause skipped for rising volume must not be called a widening pause.
+
+    The two rejections mean different things to a trader - one says the base
+    got looser, the other says it traded heavier - so they are kept apart.
+    """
+    cfg = load_config()["vcp"] | {"require_volume_contraction": True,
+                                  "volume_shrink_factor": 1.0}
+    # T2 is shallower than T3, a widening step. T1 contracts fine but the
+    # consolidation after it trades heavier, so it is rejected on volume alone.
+    cycles = [_c(1, 20.0, 500.0, 90.0), _c(2, 5.0, 900.0, 92.0),
+              _c(3, 8.0, 800.0, 94.0)]
+    widening: list = []
+    heavier: list = []
+    run = vcp._select_run(cycles, cfg, widening, heavier)
+
+    assert [c.depth_pct for c in widening] == [5.0]
+    assert [c.depth_pct for c in heavier] == [20.0]
+    assert run and run[-1].depth_pct == 8.0

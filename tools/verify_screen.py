@@ -81,11 +81,25 @@ def check(df, res, cfg) -> list[str]:
     if m["pivot_broken"] is False and since.size and float(np.max(since)) > m["pivot"] + 1e-6:
         bad.append("pivot reported unbroken but a high exceeded it")
 
-    # 9. Recorded widening pauses must actually be narrower than what follows.
+    # 9. Recorded widening pauses must actually be narrower than what follows -
+    #    that shallower-then-deeper step is the whole reason they are recorded.
     for w in m.get("widening_pauses", []):
         after = [c for c in run if c.high_date > w["date"]]
         if after and w["depth_pct"] >= after[0].depth_pct:
             bad.append("a recorded widening pause is not narrower than its successor")
+
+    # 10. A pause recorded as trading heavier must really precede a heavier one,
+    #     and must not be double-reported as a widening pause.
+    widened = {w["date"] for w in m.get("widening_pauses", [])}
+    for w in m.get("volume_rose_pauses", []):
+        if w["date"] in widened:
+            bad.append("a pause is reported as both widening and heavier-volume")
+        after = [c for c in run if c.high_date > w["date"]]
+        if after and np.isfinite(after[0].avg_volume):
+            prior = [c for c in res.raw_cycles if c.high_date == w["date"]]
+            if prior and np.isfinite(prior[0].avg_volume):
+                if after[0].avg_volume <= prior[0].avg_volume:
+                    bad.append("a pause reported as heavier-volume is not")
 
     return bad
 

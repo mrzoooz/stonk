@@ -66,6 +66,9 @@ class VCPResult:
     reason: str = ""
     contractions: list[Contraction] = field(default_factory=list)
     metrics: dict[str, Any] = field(default_factory=dict)
+    # Every consolidation the walk found, selected or not. Not published - it
+    # exists so the verifier can re-check what the selection stepped over.
+    raw_cycles: list[Contraction] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {
@@ -156,7 +159,10 @@ def _walk_cycles(
 
 
 def _select_run(
-    cycles: list[Contraction], cfg: dict, skipped: list[Contraction] | None = None
+    cycles: list[Contraction],
+    cfg: dict,
+    skipped: list[Contraction] | None = None,
+    volume_breaks: list[Contraction] | None = None,
 ) -> list[Contraction]:
     """Pick the longest trailing run whose depth (and volume) keeps shrinking.
 
@@ -164,6 +170,7 @@ def _select_run(
     widening step, and the reason a base is imperfect.
     """
     skipped = skipped if skipped is not None else []
+    volume_breaks = volume_breaks if volume_breaks is not None else []
     if not cycles:
         return []
     shrink = float(cfg.get("contraction_shrink_factor", 0.85))
@@ -188,7 +195,9 @@ def _select_run(
             break
         if check_vol and np.isfinite(prev.avg_volume) and np.isfinite(nxt.avg_volume):
             if nxt.avg_volume > prev.avg_volume * vol_shrink:
-                skipped.append(prev)
+                # Rejected for rising volume, not for widening. Reporting it as
+                # a widening pause would state the wrong reason.
+                volume_breaks.append(prev)
                 continue
         run.insert(0, prev)
         if len(run) >= max_n:
@@ -231,7 +240,8 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
         return VCPResult(False, "none", "no completed consolidation in the base window")
 
     skipped: list[Contraction] = []
-    run = _select_run(cycles, v, skipped)
+    volume_breaks: list[Contraction] = []
+    run = _select_run(cycles, v, skipped, volume_breaks)
     first, final = run[0], run[-1]
 
     pivot = final.high
@@ -401,6 +411,13 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
     # it's not a perfect VCP." Recorded, not disqualifying.
     metrics["perfect_vcp"] = not inside
 
+    heavier = [
+        c for c in volume_breaks if first.high_idx <= c.high_idx <= final.low_idx
+    ]
+    metrics["volume_rose_pauses"] = [
+        {"date": c.high_date, "depth_pct": round(c.depth_pct, 2)} for c in heavier
+    ]
+
     if status == "broke_out":
         fails.append(
             f"pivot already broken (high {high_since_support:.2f} vs pivot {pivot:.2f})"
@@ -414,6 +431,7 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
         reason="; ".join(fails),
         contractions=run,
         metrics=metrics,
+        raw_cycles=cycles,
     )
 
 
