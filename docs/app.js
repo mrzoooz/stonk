@@ -29,7 +29,8 @@
    'd-symbol', 'd-name', 'd-star', 'chart', 'chart-legend', 'plan', 'd-contractions',
    'd-vcp', 'd-stage2', 'acct', 'riskpct', 'calc-out', 'foot-note', 'range-row',
    'chart-wrap', 'calc-card', 'interval-row', 'chart-controls',
-   'chart-panel', 'chart-collapse', 'chart-expand', 'chart-body'
+   'chart-panel', 'chart-collapse', 'chart-expand', 'chart-body',
+   'd-price', 'd-change'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // ------------------------------------------------------------- storage
@@ -155,7 +156,12 @@
         '<div class="card-top">' +
           '<span class="sym">' + row.symbol + '</span>' +
           '<span class="pill ' + status + '">' + (STATUS_LABEL[status] || status) + '</span>' +
-          '<span class="price">' + num(row.price) + '</span>' +
+          '<span class="price">' + num(row.price) +
+            (row.change_pct != null && !isNaN(row.change_pct)
+              ? ' <span class="chg ' + (row.change_pct >= 0 ? 'up' : 'down') + '">' +
+                (row.change_pct >= 0 ? '+' : '') + row.change_pct.toFixed(1) + '%</span>'
+              : '') +
+          '</span>' +
           '<button class="star ' + (isStarred(row.symbol) ? 'on' : '') + '" data-star="' + row.symbol +
             '" aria-label="Star">' + (isStarred(row.symbol) ? '★' : '☆') + '</button>' +
         '</div>' +
@@ -218,6 +224,17 @@
     state.current = row;
     el['d-symbol'].textContent = row.symbol;
     el['d-name'].textContent = row.name || row.exchange || '';
+
+    // Price stays in the header so it is still on screen once you scroll down
+    // to the plan and the checklists.
+    el['d-price'].textContent = num(row.price);
+    var chg = row.change_pct;
+    var v0 = (row.vcp && row.vcp.metrics) || {};
+    var parts = [];
+    if (chg != null && !isNaN(chg)) parts.push((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%');
+    parts.push((row.date || '').slice(5) + ' close');
+    el['d-change'].textContent = parts.join(' \u00b7 ');
+    el['d-change'].className = chg == null || isNaN(chg) ? '' : (chg >= 0 ? 'up' : 'down');
     el['d-star'].textContent = isStarred(sym) ? '★' : '☆';
     el['d-star'].classList.toggle('on', isStarred(sym));
     el.detail.hidden = false;
@@ -371,8 +388,12 @@
        v.final_depth_pct != null && cfg.final_depth_pct &&
        v.final_depth_pct >= cfg.final_depth_pct[0] && v.final_depth_pct <= cfg.final_depth_pct[1],
        pct(v.final_depth_pct)],
-      ['Volume dried up', v.volume_dryup_ratio != null && v.volume_dryup_ratio <= 0.85,
-       v.volume_dryup_ratio == null ? '--' : v.volume_dryup_ratio.toFixed(2) + '× 50d'],
+      ['Final T volume dried up',
+       v.volume_dryup_ratio != null && v.volume_dryup_ratio <= (cfg.dryup_ratio || 0.85),
+       v.volume_dryup_ratio == null ? '--'
+         : v.volume_dryup_ratio.toFixed(2) + '× its 50d avg'
+           + (v.recent_volume_vs_50d != null
+              ? ' (last 5d ' + v.recent_volume_vs_50d.toFixed(2) + '×)' : '')],
       ['Support has held', v.bars_since_support != null && v.bars_since_support >= 3,
        (v.bars_since_support || 0) + ' bars since the low'],
       ['Risk at or under ' + pct(cfg.max_risk_pct, 0), v.risk_pct != null && v.risk_pct <= (cfg.max_risk_pct || 5), pct(v.risk_pct)],

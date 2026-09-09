@@ -120,8 +120,9 @@ What the screen then verifies is that the pattern is genuinely *contracting*:
 - each T is at most 85% as deep as the one before it (`vcp.contraction_shrink_factor`)
 - average volume falls from each T to the next (`vcp.require_volume_contraction`)
 - the final T is tight — within `vcp.final_depth_min_pct`–`final_depth_max_pct`
-- volume has dried up: the last 5 sessions average under 85% of the 50-day
-  average (`vcp.dryup_ratio`)
+- volume has dried up: the **final contraction's own** average volume is under
+  85% of the 50-day average as it stood at that contraction's low
+  (`vcp.dryup_ratio`)
 - the final low has held for at least a few sessions (`vcp.min_bars_since_final_low`)
 - price is still near the pivot rather than extended away from it
 

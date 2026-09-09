@@ -74,11 +74,14 @@ def evaluate_symbol(symbol: str, name: str, exchange: str, df: pd.DataFrame,
     st.metrics["rs_126d"] = _round(ind.relative_strength(df["close"], bench_close, 126))
     st.metrics["rs_63d"] = _round(ind.relative_strength(df["close"], bench_close, 63))
 
+    prev = float(df["close"].iloc[-2]) if len(df) > 1 else float("nan")
     row = {
         "symbol": symbol,
         "name": name,
         "exchange": exchange,
         "price": _round(price, 4),
+        "prev_close": _round(prev, 4),
+        "change_pct": _round(ind.pct_from(price, prev)),
         "date": df.index[-1].strftime("%Y-%m-%d"),
         "stage2": st.as_dict(),
     }
@@ -111,6 +114,7 @@ def _thin_row(row: dict) -> dict:
         "name": row["name"],
         "exchange": row["exchange"],
         "price": row["price"],
+        "change_pct": row.get("change_pct"),
         "date": row["date"],
         "bucket": row["bucket"],
         "score": row.get("score", 0),
@@ -254,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
                 cfg.get_path("vcp.final_depth_min_pct"),
                 cfg.get_path("vcp.final_depth_max_pct"),
             ],
+            "dryup_ratio": cfg.get_path("vcp.dryup_ratio"),
             "min_dollar_volume": cfg.get_path("stage2.liquidity.min_dollar_volume"),
             "min_beta": cfg.get_path("stage2.beta.min_beta"),
             "min_market_cap": cfg.get_path("stage2.min_market_cap"),

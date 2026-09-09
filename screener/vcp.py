@@ -222,9 +222,29 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
     rr = reward / risk_abs if risk_abs > 0 else float("nan")
 
     dry_days = int(v.get("dryup_days", 5))
-    avg_recent = float(np.mean(vols[-dry_days:])) if n >= dry_days else float("nan")
     avg_50 = float(np.mean(vols[-50:])) if n >= 50 else float("nan")
-    dryup = avg_recent / avg_50 if avg_50 and np.isfinite(avg_50) and avg_50 > 0 else float("nan")
+
+    # Volume dry-up is a property of the final consolidation, not of today.
+    # Measuring it over the trailing few sessions breaks the moment the stock
+    # breaks out: the breakout's own volume surge lands inside the window and
+    # the pattern is rejected for "no dry-up" exactly when it triggers. So
+    # compare the final contraction's own volume against the 50-day average as
+    # it stood at that contraction's low.
+    base_end = final.low_idx + 1
+    base_start = max(0, base_end - 50)
+    avg_50_at_low = float(np.mean(vols[base_start:base_end])) if base_end > base_start else float("nan")
+    dryup = (
+        final.avg_volume / avg_50_at_low
+        if np.isfinite(avg_50_at_low) and avg_50_at_low > 0 and np.isfinite(final.avg_volume)
+        else float("nan")
+    )
+
+    # Kept for display: how quiet the last few sessions have been. Informative,
+    # but deliberately not part of the pass/fail decision.
+    avg_recent = float(np.mean(vols[-dry_days:])) if n >= dry_days else float("nan")
+    recent_vs_50 = (
+        avg_recent / avg_50 if np.isfinite(avg_50) and avg_50 > 0 else float("nan")
+    )
 
     dist_pct = (price - pivot) / pivot * 100.0 if pivot > 0 else float("nan")
     last_vol = float(vols[-1])
@@ -250,6 +270,7 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
         "final_depth_pct": round(final.depth_pct, 2),
         "distance_to_pivot_pct": round(dist_pct, 2),
         "volume_dryup_ratio": round(dryup, 3) if np.isfinite(dryup) else None,
+        "recent_volume_vs_50d": round(recent_vs_50, 3) if np.isfinite(recent_vs_50) else None,
         "volume_vs_50d": round(vol_multiple, 2) if np.isfinite(vol_multiple) else None,
         "bars_since_support": end - final.low_idx,
     }
@@ -267,7 +288,7 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
     if not (lo_f <= final.depth_pct <= hi_f):
         fails.append(f"final T {final.depth_pct:.1f}% outside {lo_f:g}-{hi_f:g}%")
     if np.isfinite(dryup) and dryup > float(v.get("dryup_ratio", 0.85)):
-        fails.append(f"no volume dry-up ({dryup:.2f}x 50d)")
+        fails.append(f"final T volume {dryup:.2f}x its 50d average, no dry-up")
     if price <= support:
         fails.append("price has broken the support line")
 

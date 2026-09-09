@@ -119,3 +119,70 @@ def test_short_history_is_rejected_cleanly():
     res = vcp.detect(df, CFG)
     assert not res.passed
     assert res.contractions == []
+
+
+def _append_breakout(df, pivot, days=2, vol_multiple=3.2):
+    """Extend a base with a textbook breakout: through the pivot on big volume."""
+    import numpy as np
+    import pandas as pd
+
+    avg50 = float(np.mean(df["volume"].to_numpy()[-50:]))
+    out = df.copy()
+    for step in range(1, days + 1):
+        px = pivot * (1 + 0.012 * step)
+        idx = out.index[-1] + pd.Timedelta(days=1)
+        out.loc[idx] = {"open": px * 0.995, "high": px * 1.005, "low": px * 0.99,
+                        "close": px, "volume": avg50 * vol_multiple}
+    return out
+
+
+def test_dryup_survives_the_breakout_it_is_supposed_to_precede():
+    """A breakout's own volume surge must not read as "no dry-up".
+
+    Measuring dry-up over the trailing sessions rejected valid patterns at the
+    exact moment they triggered, because the breakout volume landed inside the
+    measurement window.
+    """
+    base = build_base(t3_low=55.3)
+    quiet = vcp.detect(base, CFG)
+    assert quiet.passed, quiet.reason
+
+    broken_out = vcp.detect(_append_breakout(base, quiet.metrics["pivot"]), CFG)
+    assert broken_out.status.startswith("breakout")
+    assert "dry-up" not in broken_out.reason, broken_out.reason
+    assert broken_out.passed, broken_out.reason
+
+
+def test_dryup_is_stable_as_bars_are_added_after_the_pattern():
+    """The reading describes the consolidation, so it must not drift with time."""
+    base = build_base(t3_low=55.3)
+    before = vcp.detect(base, CFG).metrics["volume_dryup_ratio"]
+    after = vcp.detect(
+        _append_breakout(base, vcp.detect(base, CFG).metrics["pivot"]), CFG
+    ).metrics["volume_dryup_ratio"]
+    assert before == pytest.approx(after, rel=0.02)
+
+
+def test_a_noisy_final_contraction_still_fails_the_dryup_check():
+    """The check must keep rejecting patterns whose final T is not quiet."""
+    import numpy as np
+
+    df = build_base(t3_low=55.3)
+    res = vcp.detect(df, CFG)
+    final = res.contractions[-1]
+    loud = df.copy()
+    col = loud.columns.get_loc("volume")
+    loud.iloc[final.high_idx:final.low_idx + 1, col] *= 12
+    out = vcp.detect(loud, CFG)
+    assert not out.passed
+    assert "dry-up" in out.reason
+
+
+def test_recent_volume_is_reported_but_not_decisive():
+    base = build_base(t3_low=55.3)
+    res = vcp.detect(_append_breakout(base, vcp.detect(base, CFG).metrics["pivot"]), CFG)
+    # The trailing window is loud during a breakout...
+    assert res.metrics["recent_volume_vs_50d"] > 1.0
+    # ...but the contraction itself was quiet, and that is what decides.
+    assert res.metrics["volume_dryup_ratio"] < CFG["vcp"]["dryup_ratio"]
+    assert res.passed

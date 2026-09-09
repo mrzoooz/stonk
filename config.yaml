@@ -98,10 +98,13 @@ vcp:
   require_volume_contraction: true
   volume_shrink_factor: 1.0
 
-  # Volume dry-up right before the breakout: 5-day average volume relative to
-  # the 50-day average.
-  dryup_days: 5
+  # Volume dry-up in the final consolidation: that contraction's own average
+  # volume against the 50-day average as it stood at the contraction's low.
+  # Measured over the contraction rather than the trailing sessions, so a
+  # breakout's volume surge cannot destroy the reading.
   dryup_ratio: 0.85
+  # Display only - how quiet the last few sessions have been.
+  dryup_days: 5
 
   # The final low has to hold for a few bars before the consolidation counts
   # as finished.

@@ -80,7 +80,10 @@ h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppe
 .card:active { background: var(--surface-2); }
 .card-top { display: flex; align-items: baseline; gap: 8px; }
 .sym { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
-.price { font-size: 15px; color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+.price { font-size: 15px; color: var(--text); margin-left: auto; font-variant-numeric: tabular-nums; }
+.price .chg { font-size: 11px; font-weight: 600; }
+.price .chg.up { color: var(--green); }
+.price .chg.down { color: var(--red); }
 .name { color: var(--muted); font-size: 12px; margin: 2px 0 9px;
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -126,6 +129,14 @@ h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppe
 .sheet-title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .sheet-title strong { font-size: 18px; }
 .sheet-title span { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-price { text-align: right; flex: 0 0 auto; line-height: 1.2; }
+.sheet-price strong { font-size: 19px; font-variant-numeric: tabular-nums; display: block; }
+.sheet-price span { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.sheet-price span.up { color: var(--green); }
+.sheet-price span.down { color: var(--red); }
+.sheet-asof { font-size: 10px; color: var(--muted); text-align: right;
+              padding: 0 var(--pad) 6px; margin: -4px 0 0; }
+
 .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px var(--pad) calc(var(--safe-bottom) + 40px); }
 
 .chart-panel { margin-bottom: 12px; }
