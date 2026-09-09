@@ -445,7 +445,7 @@
         ' for a tighter pivot.');
     }
     if (v.perfect_vcp === false) {
-      caveats.push('A pause inside the base was wider than the one after it, so the ' +
+      caveats.push('A pause inside the base was followed by a wider one, so the ' +
         'contraction is not clean. The reference calls that "not a perfect VCP" rather ' +
         'than not a VCP - the pattern stands, but it is a weaker one.');
     }
@@ -529,8 +529,10 @@
       ['No widening pause in the base',
        v.perfect_vcp !== false,
        !v.widening_pauses || !v.widening_pauses.length ? 'clean sequence'
-         : v.widening_pauses.length + ' wider pause(s), e.g. ' +
-           pct(v.widening_pauses[0].depth_pct) + ' on ' + v.widening_pauses[0].date],
+         : 'widened after the ' + pct(v.widening_pauses[0].depth_pct) + ' pause on ' +
+           v.widening_pauses[0].date +
+           (v.widening_pauses.length > 1
+             ? ' (+' + (v.widening_pauses.length - 1) + ' more)' : '')],
       ['Volume fell across the base',
        !v.volume_rose_pauses || !v.volume_rose_pauses.length,
        !v.volume_rose_pauses || !v.volume_rose_pauses.length ? 'declining'
