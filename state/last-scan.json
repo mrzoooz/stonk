@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-09-08T16:57:01+00:00",
-  "as_of": "2026-09-04",
+  "generated_at": "2026-09-09T02:00:09+00:00",
+  "as_of": "2026-09-08",
   "counts": {
-    "ready": 4,
-    "watch": 57,
-    "stage2": 31,
+    "ready": 1,
+    "watch": 65,
+    "stage2": 32,
     "errors": 0
   },
-  "elapsed_sec": 46.9
+  "elapsed_sec": 2133.0
 }
