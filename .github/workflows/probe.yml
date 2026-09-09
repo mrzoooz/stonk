@@ -18,3 +18,5 @@ jobs:
       - run: python tools/probe_sources.py
       - run: python tools/probe_candidates.py
         if: always()
+      - run: python tools/probe_splits.py
+        if: always()
