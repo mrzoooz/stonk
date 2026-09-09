@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from screener.fetch import PriceStore
-from screener.run import main
+from screener.run import evaluate_symbol, main
 from tests.synth import _bars, benchmark_like, leg
 from tests.test_vcp import build_base
 
@@ -93,3 +93,24 @@ def test_meta_is_written(screened):
     meta = json.loads((out / "meta.json").read_text())
     assert meta["counts"]["ready"] == 1
     assert meta["as_of"]
+
+
+def test_a_stale_symbol_is_dropped(tmp_path):
+    """A delisted stock keeps its history; it must not be screened as current."""
+    import pandas as pd
+    from screener.config import load_config
+
+    cfg = load_config()
+    df = build_base(t3_low=55.3)
+    df["volume"] *= 40
+    bench = benchmark_like(df["close"])
+
+    fresh = evaluate_symbol("X", "", "", df, bench, cfg, market_date=df.index[-1])
+    assert fresh is not None and fresh["bucket"] != "rejected"
+
+    # Same data, but the market has moved on by a month.
+    stale = evaluate_symbol(
+        "X", "", "", df, bench, cfg,
+        market_date=df.index[-1] + pd.Timedelta(days=30),
+    )
+    assert stale is None

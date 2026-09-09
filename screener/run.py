@@ -61,11 +61,19 @@ def _series_payload(df: pd.DataFrame, bars: int, cfg: dict) -> dict:
 
 
 def evaluate_symbol(symbol: str, name: str, exchange: str, df: pd.DataFrame,
-                    bench_close: pd.Series, cfg: dict) -> dict | None:
+                    bench_close: pd.Series, cfg: dict,
+                    market_date: pd.Timestamp | None = None) -> dict | None:
     """Run both engines against one symbol and return a result row."""
     ucfg = cfg.get("universe", {})
     if len(df) < int(ucfg.get("min_history_days", 260)):
         return None
+
+    # A delisted or halted symbol keeps its history in the cache. Without this
+    # its stale close would be screened as though it were today's price.
+    max_stale = int(ucfg.get("max_staleness_days", 7) or 0)
+    if market_date is not None and max_stale > 0:
+        if (market_date - df.index[-1]).days > max_stale:
+            return None
     price = float(df["close"].iloc[-1])
     if not math.isfinite(price) or price < float(ucfg.get("min_price", 0)):
         return None
@@ -188,6 +196,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # 3. evaluate -------------------------------------------------------
     history_days = int(cfg.get("data", {}).get("history_days", 800))
+    # The benchmark trades every session, so its last bar is the market's
+    # newest session and the reference for judging a symbol stale.
+    market_date = bench_df.index[-1] if not bench_df.empty else None
     rows: list[dict] = []
     errors = 0
     for i, meta in enumerate(universe, start=1):
@@ -197,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
             if df.empty:
                 continue
             row = evaluate_symbol(sym, meta.get("name", ""), meta.get("exchange", ""),
-                                  df, bench_close, cfg)
+                                  df, bench_close, cfg, market_date)
             if row and row["bucket"] != "rejected":
                 rows.append(row)
         except Exception as exc:  # noqa: BLE001 - one bad symbol must not stop the scan

@@ -12,6 +12,10 @@ universe:
   # Drop obvious non-common-stock instruments (warrants, units, rights, prefs).
   exclude_suffixed: true
   min_price: 5.0
+  # Drop symbols whose newest bar lags the market's newest session by more than
+  # this many calendar days. A delisted or halted stock keeps its cached
+  # history and would otherwise be screened as if its last close were today's.
+  max_staleness_days: 7
   # A symbol needs at least this many daily bars to be evaluated at all
   # (200MA + 20-day slope lookback + slack).
   min_history_days: 260
