@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-09T03:23:28+00:00",
+  "generated_at": "2026-09-09T03:26:12+00:00",
   "as_of": "2026-09-08",
   "counts": {
     "ready": 0,
@@ -8,5 +8,14 @@
     "errors": 0,
     "price_steps_flagged": 7
   },
-  "elapsed_sec": 53.2
+  "watch_reasons": {
+    "reward:risk below minimum": 52,
+    "risk above ceiling": 48,
+    "too few contractions": 43,
+    "no volume dry-up": 32,
+    "final contraction outside the tight range": 31,
+    "pivot already broken (missed entry)": 30,
+    "first contraction too deep": 6
+  },
+  "elapsed_sec": 48.2
 }
