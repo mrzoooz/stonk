@@ -257,6 +257,16 @@ on a real runner rather than by assumption:
   `assetclass=etf`. The SPY benchmark needs this, and without it beta and
   relative strength silently fail for every stock.
 
+**Splits are back-adjusted.** The feed is unadjusted, so a split leaves a step
+change in the series: prices before it sit at the old scale. Left alone, a
+split 100 sessions ago moves a 200-day average by about 45% and breaks five of
+the Stage 2 checks, reads as a huge fake contraction, and inverts beta. A step
+is treated as a split only when the close ratio sits within 1.5% of a whole
+factor, share volume steps the opposite way by about that same factor (the
+volume feed is unadjusted too), and the event day is not a volume outlier -
+which is what separates a split from a crash. `tools/audit_data.py` reports
+what was found; on a recent run, 25 of ~6,000 symbols carried split steps.
+
 If a source starts rate-limiting mid-run the fetcher disables it and continues
 on the other. Re-run the **Probe data sources** workflow if a source ever
 appears to break; it prints exactly what each one returns.

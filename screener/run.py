@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from . import adjust as adjmod
 from . import indicators as ind
 from . import stage2 as s2mod
 from . import vcp as vcpmod
@@ -187,7 +188,9 @@ def main(argv: list[str] | None = None) -> int:
         log.info("fetch: %s", stats)
         store.prune(int(cfg.get("data", {}).get("history_days", 800)) + 60)
 
-    bench_df = store.load(benchmark)
+    bench_df, bench_splits = adjmod.back_adjust(store.load(benchmark))
+    if bench_splits:
+        log.info("benchmark %s back-adjusted for %d split(s)", benchmark, len(bench_splits))
     if bench_df.empty:
         log.error("no benchmark data for %s - beta and RS cannot be computed", benchmark)
         bench_close = pd.Series(dtype=float)
@@ -201,15 +204,27 @@ def main(argv: list[str] | None = None) -> int:
     market_date = bench_df.index[-1] if not bench_df.empty else None
     rows: list[dict] = []
     errors = 0
+    adjusted_symbols = 0
     for i, meta in enumerate(universe, start=1):
         sym = meta["symbol"]
         try:
             df = store.load(sym, history_days)
             if df.empty:
                 continue
+            # The feed is unadjusted, so a split leaves a step change that
+            # corrupts every moving average until it falls out of the window.
+            df, splits = adjmod.back_adjust(df)
+            if splits:
+                adjusted_symbols += 1
+                log.debug("%s: back-adjusted %d split(s): %s", sym, len(splits),
+                          [(a.date, a.factor) for a in splits])
             row = evaluate_symbol(sym, meta.get("name", ""), meta.get("exchange", ""),
                                   df, bench_close, cfg, market_date)
             if row and row["bucket"] != "rejected":
+                if splits:
+                    row["split_adjustments"] = [
+                        {"date": a.date, "factor": a.factor} for a in splits
+                    ]
                 rows.append(row)
         except Exception as exc:  # noqa: BLE001 - one bad symbol must not stop the scan
             errors += 1
@@ -260,6 +275,7 @@ def main(argv: list[str] | None = None) -> int:
             "watch": len(watch),
             "stage2": len(stage_only),
             "errors": errors,
+            "split_adjusted": adjusted_symbols,
         },
         "config": {
             "max_risk_pct": cfg.get_path("risk.max_risk_pct"),
