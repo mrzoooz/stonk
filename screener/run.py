@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 import logging
 import math
 import shutil
@@ -113,6 +114,40 @@ def evaluate_symbol(symbol: str, name: str, exchange: str, df: pd.DataFrame,
 
     row["score"] = score(vres.metrics, st.metrics)
     return row
+
+
+# Maps a failure clause onto a stable label, so the nightly summary can show
+# which rule is doing the filtering rather than thousands of unique strings.
+_REASON_LABELS = (
+    ("pivot already broken", "pivot already broken (missed entry)"),
+    ("risk", "risk above ceiling"),
+    ("reward:risk", "reward:risk below minimum"),
+    ("final T volume", "no volume dry-up"),
+    ("final T", "final contraction outside the tight range"),
+    ("T1 too deep", "first contraction too deep"),
+    ("only", "too few contractions"),
+    ("price has broken", "support broken"),
+    ("price", "too far from the pivot"),
+)
+
+
+def _reason_label(clause: str) -> str:
+    text = clause.strip().lower()
+    for prefix, label in _REASON_LABELS:
+        if text.startswith(prefix.lower()):
+            return label
+    return clause.strip()
+
+
+def summarise_reasons(rows: list[dict]) -> dict[str, int]:
+    """Count why near-miss candidates were held back."""
+    counts: Counter[str] = Counter()
+    for row in rows:
+        reason = (row.get("vcp") or {}).get("reason") or ""
+        for clause in reason.split(";"):
+            if clause.strip():
+                counts[_reason_label(clause)] += 1
+    return dict(counts.most_common())
 
 
 def _thin_row(row: dict) -> dict:
@@ -285,6 +320,7 @@ def main(argv: list[str] | None = None) -> int:
             "errors": errors,
             "price_steps_flagged": adjusted_symbols,
         },
+        "watch_reasons": summarise_reasons(watch),
         "config": {
             "max_risk_pct": cfg.get_path("risk.max_risk_pct"),
             "min_reward_risk": cfg.get_path("risk.min_reward_risk"),
@@ -309,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
                 "generated_at": payload["generated_at"],
                 "as_of": payload["as_of"],
                 "counts": payload["counts"],
+                "watch_reasons": payload["watch_reasons"],
                 "elapsed_sec": round(time.time() - started, 1),
             },
             indent=2,
