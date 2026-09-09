@@ -436,3 +436,44 @@ def test_a_base_that_truly_halves_each_time_meets_the_ideal():
             for i in range(1, len(res.contractions))
         ]
         assert res.metrics["preferred"]["shrink"] is (max(ratios) <= 0.5)
+
+
+def test_a_shallow_wobble_between_consolidations_is_skipped_not_a_wall():
+    """Reproduces NTRA: a five-day dip sat between two real consolidations.
+
+    Raw cycles were 13.89% (288 -> 248), then 6.45% (326 -> 305), then 7.34%
+    (343 -> 318). Walking back from the last, 7.34% is wider than 6.45%, so
+    selection stopped there and reported a single consolidation - discarding
+    the 13.89% base entirely and, with it, most of the measured move.
+    """
+    from screener.vcp import Contraction, _select_run
+
+    def cyc(i, high, low, vol, hi_idx, lo_idx):
+        depth = (high - low) / high * 100
+        return Contraction(index=i, high_idx=hi_idx, low_idx=lo_idx,
+                           high_date="", low_date="", high=high, low=low,
+                           depth_pct=depth, bars=lo_idx - hi_idx + 1, avg_volume=vol)
+
+    cycles = [
+        cyc(1, 225.70, 204.16, 3.0e6, 10, 20),
+        cyc(2, 227.90, 208.79, 2.8e6, 22, 30),
+        cyc(3, 288.04, 248.03, 2.5e6, 40, 60),   # the real T1
+        cyc(4, 326.03, 305.00, 2.2e6, 70, 75),   # five-day wobble
+        cyc(5, 343.18, 318.00, 2.0e6, 85, 90),   # the real T2
+    ]
+    cfg = load_config()["vcp"]
+    run = _select_run(cycles, cfg)
+    depths = [round(c.depth_pct, 2) for c in run]
+
+    assert len(run) >= 2, f"the 13.89% consolidation must survive, got {depths}"
+    assert any(abs(d - 13.89) < 0.1 for d in depths), depths
+    assert depths[-1] == pytest.approx(7.34, abs=0.05), "the final T still sets the pivot"
+    # And the run is a genuine contraction sequence.
+    assert all(depths[i] <= depths[i - 1] for i in range(1, len(depths))), depths
+
+
+def test_skipping_never_breaks_the_ascending_low_rule():
+    """Skipping looks further back, so it must not pick up a lower structure."""
+    res = vcp.detect(build_stepped_base(), CFG)
+    lows = [c.low for c in res.contractions]
+    assert lows == sorted(lows), lows

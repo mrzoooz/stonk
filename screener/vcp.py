@@ -169,13 +169,19 @@ def _select_run(cycles: list[Contraction], cfg: dict) -> list[Contraction]:
     run = [cycles[-1]]
     for prev in reversed(cycles[:-1]):
         nxt = run[0]
+        # A cycle shallower than the one after it is not the previous T - it is
+        # a wobble inside the advance between two consolidations. Skip it and
+        # keep looking further back, rather than treating it as the end of the
+        # pattern: stopping there discards every genuine consolidation before
+        # it, which is how a 14% base could be reduced to the 7% pullback that
+        # followed a five-day dip.
         if nxt.depth_pct > prev.depth_pct * shrink:
-            break
+            continue
         if higher_lows and nxt.low < prev.low * (1.0 - tol):
-            break
+            continue
         if check_vol and np.isfinite(prev.avg_volume) and np.isfinite(nxt.avg_volume):
             if nxt.avg_volume > prev.avg_volume * vol_shrink:
-                break
+                continue
         run.insert(0, prev)
         if len(run) >= max_n:
             break
