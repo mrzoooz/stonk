@@ -344,13 +344,32 @@
       series = row._weekly;
     }
 
+    // "Base" frames the consolidations themselves. On a chart covering a long
+    // advance the base is a sliver at the right-hand edge, which is exactly
+    // the part you need to read.
+    var total = series.c.length;
+    var bars, fitPriceOnly = false;
+    if (state.months === 'base' && contractions.length) {
+      var firstBar = Math.max(0, contractions[0].high_idx);
+      bars = Math.min(total, Math.round((total - firstBar) * 1.4) + 4);
+      bars = Math.max(bars, 24);          // never so tight it is unreadable
+      fitPriceOnly = true;
+    } else {
+      var months = state.months === 'base' ? 6 : state.months;
+      bars = Math.round(months * BARS_PER_MONTH[state.interval]);
+    }
+
     VCPChart.draw(el.chart, series, {
-      bars: Math.round(state.months * BARS_PER_MONTH[state.interval]),
+      bars: bars,
       pivot: v.pivot,
       support: v.support,
-      contractions: contractions
+      contractions: contractions,
+      fitPriceOnly: fitPriceOnly
     });
     el['chart-legend'].innerHTML =
+      (state.months === 'base'
+        ? '<span>Base view - scaled to the consolidations, so the longer averages sit off-chart</span>'
+        : '') +
       legendItem(VCPChart.COLORS.ma50, '50MA') +
       legendItem(VCPChart.COLORS.ma150, '150MA') +
       legendItem(VCPChart.COLORS.ma200, '200MA') +
@@ -367,6 +386,13 @@
   }
 
   function setExpanded(on) {
+    var hasBase = !!(state.current && state.current.vcp &&
+                     (state.current.vcp.contractions || []).length);
+    if (on && hasBase && state.months !== 'base') {
+      state.months = 'base';
+      markActive('range-row', 'months', 'base');
+      saveChartPrefs();
+    }
     state.expanded = on;
     el['chart-panel'].classList.toggle('is-expanded', on);
     // Stop the page behind the overlay from scrolling under a finger.
@@ -620,7 +646,9 @@
       drawChart();
     });
   }
-  wireChartControls('range-row', 'months', function (b) { return parseFloat(b.dataset.months); });
+  wireChartControls('range-row', 'months', function (b) {
+    return b.dataset.months === 'base' ? 'base' : parseFloat(b.dataset.months);
+  });
   wireChartControls('interval-row', 'interval', function (b) { return b.dataset.interval; });
   el['chart-collapse'].addEventListener('click', function () { setCollapsed(!state.collapsed); });
   el['chart-expand'].addEventListener('click', function () { setExpanded(!state.expanded); });

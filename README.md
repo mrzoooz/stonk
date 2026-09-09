@@ -176,8 +176,16 @@ the way when you want the numbers below it. Each consolidation band is labelled
 with its depth, so the shrinking T1 -> T2 -> T3 sequence is readable without
 cross-referencing the table.
 
-It has two independent controls: **range** (3M / 6M / 1Y / 2Y) and
-**interval** (daily or weekly candles). Weekly is the view criterion 5 is
+It has two independent controls: **range** (Base / 3M / 6M / 1Y / 2Y) and
+**interval** (daily or weekly candles).
+
+**Base** frames the consolidations themselves, and expanding the chart selects
+it automatically. On a stock that has run a long way, the base is a sliver at
+the right-hand edge and unreadable at any wider range - and the long moving
+averages make it worse, because including them in the vertical scale squashes
+the price action into a fraction of the pane. In Base view the scale is fitted
+to the candles and the pivot and stop levels; the 150 and 200MAs simply run off
+the bottom, which is what the legend note says. Weekly is the view criterion 5 is
 judged on - green weeks against red weeks - and it fits a whole base on a phone
 screen. Weekly candles are aggregated in the browser from the same daily bars,
 so switching costs no extra download.

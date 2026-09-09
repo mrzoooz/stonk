@@ -118,13 +118,19 @@
       if (lows[i] != null && lows[i] < lo) lo = lows[i];
       if (highs[i] != null && highs[i] > hi) hi = highs[i];
     }
-    maKeys.forEach(function (k) {
-      for (var j = 0; j < n; j++) {
-        var v = mas[k][j];
-        if (v == null) continue;
-        if (v < lo) lo = v; if (v > hi) hi = v;
-      }
-    });
+    // Including the long averages in the scale is right for a wide view, but
+    // ruins a zoomed one: with price at 190 and the 200MA at 150, the base
+    // gets squashed into the top eighth of the pane. When fitting to the base,
+    // scale to the candles and the levels, and let the averages run off.
+    if (!opts.fitPriceOnly) {
+      maKeys.forEach(function (k) {
+        for (var j = 0; j < n; j++) {
+          var v = mas[k][j];
+          if (v == null) continue;
+          if (v < lo) lo = v; if (v > hi) hi = v;
+        }
+      });
+    }
     [opts.pivot, opts.support].forEach(function (v) {
       if (v == null) return;
       if (v < lo) lo = v; if (v > hi) hi = v;
@@ -150,6 +156,7 @@
     });
 
     // --- shade each contraction so the tightening is visible at a glance
+    var lastLabelRight = -Infinity, labelRow = 0;
     (opts.contractions || []).forEach(function (c, idx) {
       var a = c.high_idx - from, b = c.low_idx - from;
       if (b < 0 || a > n) return;
@@ -161,13 +168,24 @@
       // shrinking sequence is the whole point of the pattern.
       var mid = (x0 + x1) / 2;
       ctx.textAlign = 'center';
-      ctx.fillStyle = COLORS.text;
       ctx.font = 'bold 10px -apple-system, sans-serif';
-      ctx.fillText('T' + c.index, mid, padT + 9);
-      if (c.depth_pct != null) {
+      var label = c.depth_pct != null ? c.depth_pct.toFixed(1) + '%' : '';
+      var width = Math.max(ctx.measureText(label).width, 16);
+      // Narrow neighbouring bands would print their labels on top of each
+      // other, so stagger onto a second line instead.
+      labelRow = (mid - width / 2 < lastLabelRight + 3) ? (labelRow + 1) % 2 : 0;
+      lastLabelRight = mid + width / 2;
+      var top = padT + 9 + labelRow * 24;
+      // The pivot line often runs straight through this text, so lay a chip
+      // behind it.
+      var chipW = Math.max(width, 20) + 8;
+      ctx.fillStyle = 'rgba(11,15,20,.72)';
+      ctx.fillRect(mid - chipW / 2, top - 9, chipW, label ? 23 : 11);
+      ctx.fillStyle = COLORS.text;
+      ctx.fillText('T' + c.index, mid, top);
+      if (label) {
         ctx.fillStyle = COLORS.up;
-        ctx.font = 'bold 10px -apple-system, sans-serif';
-        ctx.fillText(c.depth_pct.toFixed(1) + '%', mid, padT + 21);
+        ctx.fillText(label, mid, top + 12);
       }
       ctx.font = '10px -apple-system, sans-serif';
     });
@@ -195,6 +213,10 @@
     }
 
     // --- moving averages
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(padL, padT, plotW, priceH);
+    ctx.clip();
     maKeys.forEach(function (key) {
       ctx.strokeStyle = COLORS[key]; ctx.lineWidth = 1.4;
       ctx.beginPath();
@@ -207,6 +229,7 @@
       }
       ctx.stroke();
     });
+    ctx.restore();
 
     // --- pivot and support lines
     function level(value, color, label) {
