@@ -445,9 +445,10 @@
         ' for a tighter pivot.');
     }
     if (v.perfect_vcp === false) {
-      caveats.push('A pause inside the base was followed by a wider one, so the ' +
-        'contraction is not clean. The reference calls that "not a perfect VCP" rather ' +
-        'than not a VCP - the pattern stands, but it is a weaker one.');
+      caveats.push('The base widens at ' + (v.widening_pauses || []).length +
+        ' step(s) instead of tightening all the way in, so the contraction is not ' +
+        'clean. The reference calls that "not a perfect VCP" rather than not a VCP - ' +
+        'the pattern stands, but it is a weaker one.');
     }
     if (v.reward_risk != null && Number(v.reward_risk.toFixed(1)) < L.okRR) {
       caveats.push('Reward:risk of 1 : ' + v.reward_risk.toFixed(1) + ' is below the 1 : ' +
@@ -473,7 +474,10 @@
     el['d-contractions'].innerHTML =
       '<table class="t"><thead><tr><th>T</th><th>High</th><th>Low</th><th>Depth</th><th>Bars</th><th>Avg vol</th></tr></thead><tbody>' +
       cs.map(function (c) {
-        return '<tr><td>T' + c.index + '</td><td>' + num(c.high) + '</td><td>' + num(c.low) +
+        // A T deeper than the one before it loosened the base; flag it in the
+        // table as well as on the chart so the sequence reads honestly.
+        return '<tr' + (c.widened ? ' class="widened"' : '') + '><td>T' + c.index +
+               (c.widened ? ' &#9650;' : '') + '</td><td>' + num(c.high) + '</td><td>' + num(c.low) +
                '</td><td>' + c.depth_pct.toFixed(1) + '%</td><td>' + c.bars + '</td><td>' +
                (c.avg_volume >= 1e6 ? (c.avg_volume / 1e6).toFixed(1) + 'M' : Math.round(c.avg_volume / 1e3) + 'K') +
                '</td></tr>';
@@ -488,8 +492,12 @@
     var rules = [
       ['At least ' + (cfg.min_contractions || 2) + ' contractions',
        (v.contraction_count || 0) >= (cfg.min_contractions || 2), (v.contraction_count || 0) + ' found'],
-      ['Each T tighter than the last', v.final_depth_pct != null && v.first_depth_pct != null &&
-       v.final_depth_pct < v.first_depth_pct, pct(v.first_depth_pct) + ' → ' + pct(v.final_depth_pct)],
+      ['Each T tighter than the last',
+       v.perfect_vcp === true,
+       !v.widening_pauses || !v.widening_pauses.length
+         ? pct(v.first_depth_pct) + ' → ' + pct(v.final_depth_pct) + ', every step narrower'
+         : v.widening_pauses.length + ' step(s) widen, e.g. T' +
+           v.widening_pauses[0].index + ' at ' + pct(v.widening_pauses[0].depth_pct)],
       ['Final T within ' + (cfg.final_depth_pct ? cfg.final_depth_pct.join('-') : '2-12') + '%',
        v.final_depth_pct != null && cfg.final_depth_pct &&
        v.final_depth_pct >= cfg.final_depth_pct[0] && v.final_depth_pct <= cfg.final_depth_pct[1],
@@ -526,13 +534,6 @@
        !!(v.preferred && v.preferred.shrink),
        v.worst_shrink_ratio == null ? '--'
          : 'worst step ' + v.worst_shrink_ratio.toFixed(2) + ' of the previous'],
-      ['No widening pause in the base',
-       v.perfect_vcp !== false,
-       !v.widening_pauses || !v.widening_pauses.length ? 'clean sequence'
-         : 'widened after the ' + pct(v.widening_pauses[0].depth_pct) + ' pause on ' +
-           v.widening_pauses[0].date +
-           (v.widening_pauses.length > 1
-             ? ' (+' + (v.widening_pauses.length - 1) + ' more)' : '')],
       // Only meaningful once the scan publishes the field. A bundle from
       // before it existed says nothing about volume, so the row is dropped
       // below rather than shown as a tick nobody earned.

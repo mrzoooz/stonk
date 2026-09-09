@@ -9,7 +9,8 @@
     up: '#22c55e', down: '#ef4444',
     ma50: '#38bdf8', ma150: '#f59e0b', ma200: '#a78bfa',
     pivot: '#e6edf3', support: '#ef4444',
-    grid: '#24303d', text: '#8b9bb0', volUp: '#1f6f3f', volDown: '#7f2b2b'
+    grid: '#24303d', text: '#8b9bb0', volUp: '#1f6f3f', volDown: '#7f2b2b',
+    warn: '#f59e0b'
   };
 
   function niceTicks(min, max, count) {
@@ -162,7 +163,11 @@
       if (b < 0 || a > n) return;
       a = Math.max(a, 0); b = Math.min(b, n - 1);
       var x0 = padL + slot * a, x1 = padL + slot * (b + 1);
-      ctx.fillStyle = 'rgba(56,189,248,' + (0.05 + idx * 0.025) + ')';
+      // Amber for a consolidation wider than the one before it: the base
+      // loosened there, which is what stops it being a textbook VCP.
+      var shade = Math.min(0.05 + idx * 0.025, 0.16);
+      ctx.fillStyle = c.widened ? 'rgba(245,158,11,' + (shade + 0.06) + ')'
+                                : 'rgba(56,189,248,' + shade + ')';
       ctx.fillRect(x0, padT, Math.max(x1 - x0, 1), priceH);
       // Label each consolidation with its number and how deep it was - the
       // shrinking sequence is the whole point of the pattern.
@@ -184,7 +189,7 @@
       ctx.fillStyle = COLORS.text;
       ctx.fillText('T' + c.index, mid, top);
       if (label) {
-        ctx.fillStyle = COLORS.up;
+        ctx.fillStyle = c.widened ? COLORS.warn : COLORS.up;
         ctx.fillText(label, mid, top + 12);
       }
       ctx.font = '10px -apple-system, sans-serif';

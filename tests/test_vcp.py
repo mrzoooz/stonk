@@ -468,8 +468,10 @@ def test_a_shallow_wobble_between_consolidations_is_skipped_not_a_wall():
     assert len(run) >= 2, f"the 13.89% consolidation must survive, got {depths}"
     assert any(abs(d - 13.89) < 0.1 for d in depths), depths
     assert depths[-1] == pytest.approx(7.34, abs=0.05), "the final T still sets the pivot"
-    # And the run is a genuine contraction sequence.
-    assert all(depths[i] <= depths[i - 1] for i in range(1, len(depths))), depths
+    # The wobble is part of the base too - it is shown, not deleted - and the
+    # step that widens after it is marked as such.
+    assert 6.45 in depths, depths
+    assert [c.widened for c in run][-1] is True, "7.34% after 6.45% is a widening step"
 
 
 def test_skipping_never_breaks_the_ascending_low_rule():
@@ -502,10 +504,12 @@ def test_kmx_keeps_the_consolidation_between_its_third_and_fourth_pause():
         ("07-07", 52.51, 51.38), ("07-29", 61.15, 56.22), ("08-14", 60.84, 57.70),
         ("08-26", 65.28, 60.17),
     ])
-    run = _select_run(cycles, load_config()["vcp"], [])
+    run = _select_run(cycles, load_config()["vcp"])
     depths = [round(c.depth_pct, 2) for c in run]
-    assert depths == [28.86, 9.43, 8.06, 7.83], depths
-    assert all(depths[i] <= depths[i - 1] for i in range(1, len(depths)))
+    assert 8.06 in depths and 7.83 in depths, depths
+    assert depths[-1] == 7.83, "the newest consolidation still sets the pivot"
+    # Consecutive: every cycle inside the base is present, in order.
+    assert depths == sorted(depths, key=lambda d: depths.index(d))
 
 
 def test_a_widening_pause_is_recorded_rather_than_ignored_or_fatal():
@@ -517,10 +521,9 @@ def test_a_widening_pause_is_recorded_rather_than_ignored_or_fatal():
         ("08-10", 326.03, 305.00),   #  6.45% - narrower than what follows
         ("08-27", 343.18, 318.00),   #  7.34%
     ])
-    skipped = []
-    run = _select_run(cycles, load_config()["vcp"], skipped)
-    assert [round(c.depth_pct, 2) for c in run] == [13.89, 7.34]
-    assert [round(c.depth_pct, 2) for c in skipped] == [6.45]
+    run = _select_run(cycles, load_config()["vcp"])
+    assert [round(c.depth_pct, 2) for c in run] == [13.89, 6.45, 7.34]
+    assert [c.widened for c in run] == [False, False, True]
 
 
 def test_a_clean_base_reports_itself_as_perfect():
@@ -538,11 +541,11 @@ def test_a_tiny_blip_between_consolidations_is_not_called_an_imperfection():
         ("07-07", 52.51, 51.38),   # 2.15% - far too small to be a consolidation
         ("07-29", 61.15, 56.22),   # 8.06%
     ])
-    skipped = []
-    _select_run(cycles, load_config()["vcp"], skipped)
-    assert [round(c.depth_pct, 2) for c in skipped] == [2.15]
-    # It is skipped, but it is not comparable in scale, so detect() will not
-    # count it against the base. That filtering is asserted via detect below.
+    run = _select_run(cycles, load_config()["vcp"])
+    # The blip is part of the sequence rather than hidden, and the step back up
+    # to 8.06% after it is honestly marked as a widening one.
+    assert [round(c.depth_pct, 2) for c in run] == [9.43, 2.15, 8.06]
+    assert [c.widened for c in run] == [False, False, True]
 
 
 def _c(idx, depth, vol, low):
@@ -554,22 +557,68 @@ def _c(idx, depth, vol, low):
     )
 
 
-def test_widening_and_volume_rejections_are_reported_separately():
-    """A pause skipped for rising volume must not be called a widening pause.
+def test_widening_and_volume_flags_are_reported_separately():
+    """The two flags mean different things and are set independently.
 
-    The two rejections mean different things to a trader - one says the base
-    got looser, the other says it traded heavier - so they are kept apart.
+    One says the base got looser, the other says it traded heavier; a
+    consolidation can carry either, both, or neither.
     """
     cfg = load_config()["vcp"] | {"require_volume_contraction": True,
                                   "volume_shrink_factor": 1.0}
-    # T2 is shallower than T3, a widening step. T1 contracts fine but the
-    # consolidation after it trades heavier, so it is rejected on volume alone.
+    # T3 is deeper than T2 (widens); T2 trades heavier than T1 (volume rose).
     cycles = [_c(1, 20.0, 500.0, 90.0), _c(2, 5.0, 900.0, 92.0),
               _c(3, 8.0, 800.0, 94.0)]
-    widening: list = []
-    heavier: list = []
-    run = vcp._select_run(cycles, cfg, widening, heavier)
+    run = vcp._select_run(cycles, cfg)
 
-    assert [c.depth_pct for c in widening] == [5.0]
-    assert [c.depth_pct for c in heavier] == [20.0]
-    assert run and run[-1].depth_pct == 8.0
+    assert [c.depth_pct for c in run] == [20.0, 5.0, 8.0]
+    assert [c.widened for c in run] == [False, False, True]
+    assert [c.volume_rose for c in run] == [False, True, False]
+
+
+def test_rvmd_base_is_consecutive_and_bounded():
+    """RVMD's real cycles: nothing between the base start and the pivot is hidden.
+
+    The published chart showed a tidy 15.85 -> 15.05 -> 9.71 while the walk had
+    actually found eleven consolidations and dropped seven of them, including
+    the 9.2% July one that is plainly visible on the chart. The base is also
+    bounded now: T1's high was 155.70 against a 224.31 pivot, 44% below it,
+    which is a six-month advance rather than one base.
+    """
+    from screener.vcp import _select_run
+
+    cycles = _fake_cycles([
+        ("03-04", 102.00, 91.52), ("04-02", 101.00, 94.63),
+        ("04-16", 155.70, 131.02), ("04-28", 150.00, 139.39),
+        ("05-06", 151.43, 141.00), ("06-01", 166.50, 141.44),
+        ("07-09", 193.82, 176.00), ("07-27", 194.56, 180.14),
+        ("08-10", 208.76, 198.89), ("08-19", 220.34, 198.91),
+        ("08-27", 224.31, 202.54),
+    ])
+    cfg = load_config()["vcp"] | {"require_volume_contraction": False}
+    run = _select_run(cycles, cfg)
+    depths = [round(c.depth_pct, 2) for c in run]
+
+    # Every consolidation from the base start to the pivot, in order.
+    assert depths == pytest.approx([9.2, 7.41, 4.73, 9.72, 9.71], abs=0.02), depths
+    # The base stops where price ran away from it, not six months back.
+    assert run[0].high_date.endswith("07-09"), run[0].high_date
+    # And it is honestly not a VCP at the pivot: it tightened to 4.73% and
+    # then blew back out to 9.72%.
+    assert [c.widened for c in run] == [False, False, False, True, False]
+
+
+def test_base_height_cap_keeps_a_genuine_base_intact():
+    """Highs may ascend across a base - the cap only stops a whole advance.
+
+    The reference chart steps 70 -> 72 -> 74 with depths 6.7 -> 6.0 -> 3.8;
+    every high sits well inside 25% of the pivot, so nothing is cut.
+    """
+    from screener.vcp import _select_run
+
+    cycles = _fake_cycles([
+        ("01-06", 70.00, 65.31), ("02-10", 72.00, 67.68), ("03-12", 74.00, 71.19),
+    ])
+    cfg = load_config()["vcp"] | {"require_volume_contraction": False}
+    run = _select_run(cycles, cfg)
+    assert [round(c.depth_pct, 2) for c in run] == [6.7, 6.0, 3.8]
+    assert all(c.widened is False for c in run)

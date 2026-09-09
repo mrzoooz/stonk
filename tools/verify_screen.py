@@ -40,14 +40,24 @@ def check(df, res, cfg) -> list[str]:
         if c.low_idx + 1 < n and float(np.min(lows[c.low_idx + 1:])) < c.low - 1e-6:
             bad.append(f"low of T{c.index} undercut later")
 
-    # 2. Lows ascend, and the sequence contracts.
+    # 2. Lows ascend. Depths are NOT required to contract - the run is the
+    #    base's actual sequence, widening steps included - but every widening
+    #    step must be marked, and no consolidation inside the base may be
+    #    missing from it. That second rule is the one that matters: the old
+    #    selection built a tidy shrinking subsequence and dropped the rest,
+    #    which is how a base that went 9.2 -> 7.4 -> 4.7 -> 9.7 was published
+    #    as a smooth 15.8 -> 15.1 -> 9.7.
     if [c.low for c in run] != sorted(c.low for c in run):
         bad.append("lows do not ascend")
-    depths = [c.depth_pct for c in run]
     shrink = float(v.get("contraction_shrink_factor", 1.0))
-    for i in range(1, len(depths)):
-        if depths[i] > depths[i - 1] * shrink + 1e-9:
-            bad.append(f"T{i+1} wider than T{i}")
+    for i in range(1, len(run)):
+        widens = run[i].depth_pct > run[i - 1].depth_pct * shrink
+        if widens != run[i].widened:
+            bad.append(f"T{i+1} widening flag does not match its depths")
+    inside = [c for c in res.raw_cycles
+              if run[0].high_idx <= c.high_idx <= run[-1].high_idx]
+    if len(inside) != len(run):
+        bad.append("a consolidation inside the base is missing from the run")
 
     # 3. Contractions are ordered and do not overlap.
     for i in range(len(run)):
@@ -81,25 +91,29 @@ def check(df, res, cfg) -> list[str]:
     if m["pivot_broken"] is False and since.size and float(np.max(since)) > m["pivot"] + 1e-6:
         bad.append("pivot reported unbroken but a high exceeded it")
 
-    # 9. Recorded widening pauses must actually be narrower than what follows -
-    #    that shallower-then-deeper step is the whole reason they are recorded.
+    # 9. The reported pauses must be run members carrying the matching flag,
+    #    and each flag must match the numbers behind it. A consolidation can
+    #    be both deeper and heavier than the one before it, so the two lists
+    #    may legitimately name the same one.
+    by_date = {c.high_date: c for c in run}
     for w in m.get("widening_pauses", []):
-        after = [c for c in run if c.high_date > w["date"]]
-        if after and w["depth_pct"] >= after[0].depth_pct:
-            bad.append("a recorded widening pause is not narrower than its successor")
-
-    # 10. A pause recorded as trading heavier must really precede a heavier one,
-    #     and must not be double-reported as a widening pause.
-    widened = {w["date"] for w in m.get("widening_pauses", [])}
+        c = by_date.get(w["date"])
+        if c is None or not c.widened:
+            bad.append("a reported widening pause is not a marked run member")
+        elif c.depth_pct <= run[c.index - 2].depth_pct:
+            bad.append("a reported widening pause is not deeper than its predecessor")
     for w in m.get("volume_rose_pauses", []):
-        if w["date"] in widened:
-            bad.append("a pause is reported as both widening and heavier-volume")
-        after = [c for c in run if c.high_date > w["date"]]
-        if after and np.isfinite(after[0].avg_volume):
-            prior = [c for c in res.raw_cycles if c.high_date == w["date"]]
-            if prior and np.isfinite(prior[0].avg_volume):
-                if after[0].avg_volume <= prior[0].avg_volume:
-                    bad.append("a pause reported as heavier-volume is not")
+        c = by_date.get(w["date"])
+        if c is None or not c.volume_rose:
+            bad.append("a reported volume pause is not a marked run member")
+        else:
+            before = run[c.index - 2]
+            if np.isfinite(c.avg_volume) and np.isfinite(before.avg_volume) \
+               and c.avg_volume <= before.avg_volume:
+                bad.append("a reported volume pause did not trade heavier")
+    if m.get("perfect_vcp") != (not any(c.widened for c in run)):
+        bad.append("perfect_vcp disagrees with the widening flags")
+
 
     return bad
 

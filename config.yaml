@@ -103,10 +103,22 @@ vcp:
   preferred_base_bars: 63
   # How many consolidations may make up one base. Bases with more than three
   # Ts are common; this only limits how many are reported, and the tightest
-  # (final) one always supplies the pivot.
-  max_contractions: 8
+  # (final) one always supplies the pivot. The base's real boundary comes from
+  # the rising-low and base-height rules below, so this is only a safety cap.
+  max_contractions: 15
 
-  # Each contraction must be at most this fraction of the previous one's depth.
+  # How far below the pivot a consolidation may sit and still belong to the
+  # same base. A base is a region price ranges in, not a whole advance: RVMD's
+  # walk ran back six months down a 91 -> 224 uptrend and collected pullbacks
+  # from 44% lower as if they were part of one base. Highs may still ascend
+  # across a base - the reference chart steps 70 -> 72 -> 74 - but by a few
+  # percent, nothing like the run-up itself.
+  max_base_height_pct: 25.0
+
+  # The step a contraction must make to count as narrowing rather than
+  # widening. Nothing is dropped from a base for failing it - the run is
+  # consecutive - but a step above this ratio is marked as a widening one and
+  # costs the base its "perfect VCP" standing.
   # 1.0 = "merely narrower"; lower demands a bigger step down each time.
   #
   # Set from the reference example rather than by taste: a textbook base
