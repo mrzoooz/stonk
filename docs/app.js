@@ -30,7 +30,7 @@
    'd-vcp', 'd-stage2', 'acct', 'riskpct', 'calc-out', 'foot-note', 'range-row',
    'chart-wrap', 'calc-card', 'interval-row', 'chart-controls',
    'chart-panel', 'chart-collapse', 'chart-expand', 'chart-body',
-   'd-price', 'd-change'
+   'd-price', 'd-change', 'chart-price', 'chart-title'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // ------------------------------------------------------------- storage
@@ -65,8 +65,7 @@
   }
   var STATUS_LABEL = {
     actionable: 'In buy zone',
-    breakout: 'Breaking out',
-    breakout_weak_volume: 'Above pivot, light volume',
+    broke_out: 'Missed - pivot already broken',
     extended: 'Extended',
     forming: 'Still forming',
     none: 'No base'
@@ -235,6 +234,14 @@
     parts.push((row.date || '').slice(5) + ' close');
     el['d-change'].textContent = parts.join(' \u00b7 ');
     el['d-change'].className = chg == null || isNaN(chg) ? '' : (chg >= 0 ? 'up' : 'down');
+
+    // Expanding the chart covers the sheet header, so the same figures are
+    // repeated in the chart's own bar, where they stay visible.
+    el['chart-title'].textContent = row.symbol;
+    el['chart-price'].innerHTML =
+      '<b>' + num(row.price) + '</b>' +
+      '<span class="' + (chg == null || isNaN(chg) ? '' : (chg >= 0 ? 'up' : 'down')) + '">' +
+      escapeHTML(parts.join(' \u00b7 ')) + '</span>';
     el['d-star'].textContent = isStarred(sym) ? '★' : '☆';
     el['d-star'].classList.toggle('on', isStarred(sym));
     el.detail.hidden = false;
@@ -399,7 +406,10 @@
       ['Risk at or under ' + pct(cfg.max_risk_pct, 0), v.risk_pct != null && v.risk_pct <= (cfg.max_risk_pct || 5), pct(v.risk_pct)],
       ['Reward:risk at least ' + (cfg.min_reward_risk || 3), v.reward_risk != null && v.reward_risk >= (cfg.min_reward_risk || 3),
        v.reward_risk == null ? '--' : '1 : ' + v.reward_risk.toFixed(1)],
-      ['Price still near the pivot', vcp.status === 'actionable' || String(vcp.status).indexOf('breakout') === 0,
+      ['Pivot not broken yet', v.pivot_broken === false,
+       v.high_since_support == null ? '--'
+         : 'high since low ' + num(v.high_since_support) + ' vs pivot ' + num(v.pivot)],
+      ['Price still near the pivot', vcp.status === 'actionable',
        pct(v.distance_to_pivot_pct) + ' from pivot']
     ];
     el['d-vcp'].innerHTML = rules.map(checkRow).join('');

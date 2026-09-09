@@ -69,8 +69,12 @@
       <div class="chart-head">
         <button class="chart-collapse" id="chart-collapse" aria-expanded="true"
                 aria-controls="chart-body">
-          <span class="chev" aria-hidden="true">&#9662;</span> Chart
+          <span class="chev" aria-hidden="true">&#9662;</span>
+          <span id="chart-title">Chart</span>
         </button>
+        <!-- Visible only when expanded: the sheet header, and the price in it,
+             is covered by the full-screen overlay. -->
+        <div class="chart-price" id="chart-price"></div>
         <button class="icon-btn small" id="chart-expand" aria-label="Expand chart">&#9974;</button>
       </div>
       <div class="chart-body" id="chart-body">

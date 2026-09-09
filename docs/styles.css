@@ -89,8 +89,7 @@ h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppe
 
 .pill { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; letter-spacing: .3px; }
 .pill.actionable { background: var(--green-dim); color: var(--green); border: 1px solid #14532d; }
-.pill.breakout { background: #052e16; color: var(--green); border: 1px solid var(--green); }
-.pill.breakout_weak_volume { background: #1c1917; color: var(--amber); border: 1px solid #78350f; }
+.pill.broke_out { background: #1c1917; color: var(--amber); border: 1px solid #78350f; }
 .pill.extended, .pill.forming, .pill.none { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
 
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -150,6 +149,12 @@ h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppe
 .chart-panel.is-collapsed .chart-collapse .chev { transform: rotate(-90deg); }
 .chart-panel.is-collapsed .chart-body { display: none; }
 .icon-btn.small { width: 32px; height: 32px; font-size: 15px; }
+.chart-price { display: none; margin-left: auto; margin-right: 10px; text-align: right; line-height: 1.15; }
+.chart-panel.is-expanded .chart-price { display: block; }
+.chart-price b { font-size: 17px; font-variant-numeric: tabular-nums; display: block; }
+.chart-price span { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chart-price span.up { color: var(--green); }
+.chart-price span.down { color: var(--red); }
 
 /* Expanded: fill the viewport in place, no new tab, no navigation. */
 .chart-panel.is-expanded {

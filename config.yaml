@@ -130,8 +130,12 @@ vcp:
   # extended, not actionable.
   max_extended_above_pivot_pct: 5.0
   # A breakout counts when price clears the pivot on this multiple of the
-  # 50-day average volume.
+  # 50-day average volume. Reported for context; a stock that has already
+  # cleared its pivot is a missed entry, not a candidate.
   breakout_volume_multiple: 1.5
+  # How far a session may pierce the pivot before the entry counts as gone.
+  # 0 means any trade above the pivot has taken it.
+  pivot_break_tolerance_pct: 0.0
 
 # ---------------------------------------------------------------------------
 # Risk / reward.

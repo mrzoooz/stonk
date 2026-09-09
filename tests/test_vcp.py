@@ -87,10 +87,43 @@ def test_a_broken_support_is_not_a_finished_consolidation():
     assert not res.passed
 
 
-def test_status_flags_a_breakout_above_the_pivot():
+def test_a_stock_that_cleared_its_pivot_is_a_missed_entry_not_a_candidate():
+    """The entry is the break above the pivot; a nightly screen sees it after
+    the fact, so a stock already through it has to be excluded."""
     res = vcp.detect(build_base(tail=57.4, last=58.2), CFG)
-    assert res.status.startswith("breakout")
-    assert res.metrics["distance_to_pivot_pct"] > 0
+    assert res.status == "broke_out"
+    assert not res.passed
+    assert "pivot already broken" in res.reason
+    assert res.metrics["pivot_broken"] is True
+
+
+def test_an_intraday_pierce_counts_even_if_it_closed_back_below():
+    """A bar that traded through the pivot took the entry with it."""
+    import pandas as pd
+
+    df = build_base(t3_low=55.3)
+    base = vcp.detect(df, CFG)
+    assert base.passed, base.reason
+    pivot = base.metrics["pivot"]
+
+    poked = df.copy()
+    idx = poked.index[-1] + pd.Timedelta(days=1)
+    # High clears the pivot, close settles under it.
+    poked.loc[idx] = {"open": pivot * 0.99, "high": pivot * 1.01,
+                      "low": pivot * 0.98, "close": pivot * 0.995,
+                      "volume": float(poked["volume"].tail(50).mean())}
+    res = vcp.detect(poked, CFG)
+    assert res.metrics["distance_to_pivot_pct"] < 0, "closed below the pivot"
+    assert res.status == "broke_out"
+    assert not res.passed
+
+
+def test_a_stock_still_under_its_pivot_stays_actionable():
+    res = vcp.detect(build_base(t3_low=55.3), CFG)
+    assert res.status == "actionable"
+    assert res.metrics["pivot_broken"] is False
+    assert res.metrics["high_since_support"] <= res.metrics["pivot"]
+    assert res.passed, res.reason
 
 
 def test_status_flags_an_extended_stock():
@@ -148,9 +181,11 @@ def test_dryup_survives_the_breakout_it_is_supposed_to_precede():
     assert quiet.passed, quiet.reason
 
     broken_out = vcp.detect(_append_breakout(base, quiet.metrics["pivot"]), CFG)
-    assert broken_out.status.startswith("breakout")
+    # It is excluded for having already broken out - but never for dry-up,
+    # which is the measurement this test is about.
+    assert broken_out.status == "broke_out"
     assert "dry-up" not in broken_out.reason, broken_out.reason
-    assert broken_out.passed, broken_out.reason
+    assert broken_out.metrics["volume_dryup_ratio"] < CFG["vcp"]["dryup_ratio"]
 
 
 def test_dryup_is_stable_as_bars_are_added_after_the_pattern():
@@ -185,4 +220,4 @@ def test_recent_volume_is_reported_but_not_decisive():
     assert res.metrics["recent_volume_vs_50d"] > 1.0
     # ...but the contraction itself was quiet, and that is what decides.
     assert res.metrics["volume_dryup_ratio"] < CFG["vcp"]["dryup_ratio"]
-    assert res.passed
+    assert "dry-up" not in res.reason

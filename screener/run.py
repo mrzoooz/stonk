@@ -104,7 +104,7 @@ def evaluate_symbol(symbol: str, name: str, exchange: str, df: pd.DataFrame,
 
     if vres.passed:
         row["bucket"] = "ready"
-    elif vres.contractions and vres.status in ("actionable", "breakout", "breakout_weak_volume"):
+    elif vres.contractions and vres.status in ("actionable", "broke_out"):
         # Shape is there but a hard rule (usually the 5% risk ceiling) is not
         # met yet. Worth watching rather than discarding.
         row["bucket"] = "watch"

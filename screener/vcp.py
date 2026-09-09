@@ -300,19 +300,37 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
         fails.append(f"reward:risk {rr:.1f} below {min_rr:g}")
 
     # --- where in the pattern are we? ------------------------------------
+    #
+    # The entry is a break *above* the pivot. Once any session has traded
+    # through it the entry has already happened, and a nightly screen only sees
+    # that after the fact - so a stock above its pivot is a missed trade, not a
+    # candidate. Both the last close and every high since the support low are
+    # checked: a bar that pierced the pivot intraday took the entry with it,
+    # even if it closed back below.
     max_below = float(v.get("max_distance_below_pivot_pct", 15.0))
     max_above = float(v.get("max_extended_above_pivot_pct", 5.0))
-    breakout_mult = float(v.get("breakout_volume_multiple", 1.5))
+    tol = float(v.get("pivot_break_tolerance_pct", 0.0)) / 100.0
+
+    high_since_support = float(np.max(highs[final.low_idx : end + 1]))
+    pivot_broken = pivot > 0 and high_since_support > pivot * (1.0 + tol)
+
     if dist_pct > max_above:
         status = "extended"
-    elif dist_pct > 0:
-        status = "breakout" if (np.isfinite(vol_multiple) and vol_multiple >= breakout_mult) else "breakout_weak_volume"
+    elif pivot_broken or dist_pct > 0:
+        status = "broke_out"
     elif dist_pct >= -max_below:
         status = "actionable"
     else:
         status = "forming"
 
-    if status in ("extended", "forming"):
+    metrics["high_since_support"] = round(high_since_support, 4)
+    metrics["pivot_broken"] = bool(pivot_broken)
+
+    if status == "broke_out":
+        fails.append(
+            f"pivot already broken (high {high_since_support:.2f} vs pivot {pivot:.2f})"
+        )
+    elif status in ("extended", "forming"):
         fails.append(f"price {dist_pct:+.1f}% from pivot ({status})")
 
     return VCPResult(
