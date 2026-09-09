@@ -344,3 +344,63 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
         contractions=run,
         metrics=metrics,
     )
+
+
+def explain(df: pd.DataFrame, cfg: dict) -> dict:
+    """Show the walk for one symbol: what it saw, and what it ignored.
+
+    The walk anchors on the highest high in the base window and only moves
+    forward from there, so any consolidation that formed *before* that high is
+    outside the base by construction. That is deliberate - a rally to a new
+    high means the earlier base resolved, and a VCP's contractions have
+    descending highs - but it is invisible in the output, so this makes it
+    explicit.
+    """
+    v = cfg.get("vcp", {})
+    n = len(df)
+    lookback = int(v.get("base_lookback_days", 130))
+    start, end = max(0, n - lookback), n - 1
+
+    highs = df["high"].to_numpy(dtype=float)
+    lows = df["low"].to_numpy(dtype=float)
+    vols = df["volume"].to_numpy(dtype=float)
+    dates = [d.strftime("%Y-%m-%d") for d in df.index]
+
+    min_swing = int(v.get("min_swing_bars", 3))
+    min_hold = int(v.get("min_bars_since_final_low", 3))
+    search_end = end - (min_swing + min_hold)
+    anchor = int(np.argmax(highs[start : search_end + 1])) + start if search_end > start else start
+
+    raw = _walk_cycles(highs, lows, vols, dates, start, end, min_swing, min_hold)
+    run = _select_run(raw, v) if raw else []
+    result = detect(df, cfg)
+
+    return {
+        "window": {
+            "from": dates[start], "to": dates[end], "bars": end - start + 1,
+            "high": round(float(np.max(highs[start:end + 1])), 2),
+            "low": round(float(np.min(lows[start:end + 1])), 2),
+        },
+        "anchor": {
+            "date": dates[anchor], "high": round(float(highs[anchor]), 2),
+            "bars_before_anchor_ignored": anchor - start,
+            "range_before_anchor": {
+                "high": round(float(np.max(highs[start:anchor + 1])), 2),
+                "low": round(float(np.min(lows[start:anchor + 1])), 2),
+            } if anchor > start else None,
+        },
+        "raw_cycles": [
+            {"from": c.high_date, "to": c.low_date, "high": round(c.high, 2),
+             "low": round(c.low, 2), "depth_pct": round(c.depth_pct, 2)}
+            for c in raw
+        ],
+        "selected": [
+            {"T": c.index, "from": c.high_date, "to": c.low_date,
+             "high": round(c.high, 2), "low": round(c.low, 2),
+             "depth_pct": round(c.depth_pct, 2)}
+            for c in run
+        ],
+        "status": result.status,
+        "passed": result.passed,
+        "reason": result.reason,
+    }

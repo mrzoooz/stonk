@@ -188,6 +188,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Override a config value for this run, e.g. --set vcp.base_lookback_days=180. "
              "Repeatable. Lets a threshold be tested without editing config.yaml.",
     )
+    parser.add_argument(
+        "--explain", default="", metavar="SYMBOL",
+        help="Print the contraction walk for one symbol and exit. Shows what the "
+             "base window covers, where the walk anchors, and what sits before "
+             "that anchor and is therefore outside the base.",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -214,6 +220,17 @@ def main(argv: list[str] | None = None) -> int:
         log.info("config override: %s = %r", path.strip(), value)
     if args.limit:
         cfg.setdefault("universe", {})["limit"] = args.limit
+
+    if args.explain:
+        store = PriceStore(args.cache)
+        sym = args.explain.strip().upper()
+        df = store.load(sym, int(cfg.get("data", {}).get("history_days", 800)))
+        if df.empty:
+            raise SystemExit(f"no cached bars for {sym}")
+        df, _ = adjmod.back_adjust(df) if cfg.get("data", {}).get("adjust_splits") else (df, [])
+        print(json.dumps(vcpmod.explain(df, cfg), indent=2))
+        store.close()
+        return 0
 
     out_dir = Path(args.out)
     series_dir = out_dir / "series"
