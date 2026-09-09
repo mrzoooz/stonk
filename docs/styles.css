@@ -234,3 +234,35 @@ table.t tr.widened td { color: var(--amber); }
   .sheet-body { max-width: 820px; margin: 0 auto; width: 100%; }
   #chart { height: 380px; }
 }
+
+
+/* --- RS heading: its own row above the canvas, never drawn over ---------- */
+.rs-head { display: flex; align-items: center; justify-content: space-between;
+           gap: 12px; padding: 8px 10px; margin: 0 0 6px;
+           background: var(--surface-2); border: 1px solid var(--line);
+           border-radius: 10px; }
+.rs-meta { min-width: 0; }
+.rs-title { font-size: 12px; font-weight: 600; color: var(--text); }
+.rs-state { font-size: 11px; margin-top: 2px; color: var(--muted); }
+.rs-state.good { color: var(--green); }
+.rs-state.bad  { color: var(--amber); }
+.rs-rating { display: flex; flex-direction: column; align-items: flex-end;
+             line-height: 1; flex: none; }
+.rs-num { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums;
+          color: var(--muted); }
+.rs-num.good { color: var(--green); }
+.rs-num.warn { color: var(--amber); }
+.rs-num.bad  { color: var(--red); }
+.rs-cap { font-size: 9px; letter-spacing: .08em; color: var(--muted);
+          margin-top: 4px; }
+
+.rs-explain { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.rs-explain > summary { font-size: 12px; color: var(--muted); cursor: pointer;
+                        list-style: none; }
+.rs-explain > summary::-webkit-details-marker { display: none; }
+.rs-explain > summary::before { content: '▸ '; }
+.rs-explain[open] > summary::before { content: '▾ '; }
+.rs-explain-body { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.rs-explain-body p { margin: 8px 0; }
+.rs-explain-body strong { color: var(--text); }
+.rs-explain-body .rs-note { color: var(--amber); }

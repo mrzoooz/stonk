@@ -33,7 +33,8 @@
    'chart-wrap', 'calc-card', 'interval-row', 'chart-controls',
    'chart-panel', 'chart-collapse', 'chart-expand', 'chart-body',
    'd-price', 'd-change', 'chart-price', 'chart-title',
-   'hide-missed', 'hide-missed-wrap'
+   'hide-missed', 'hide-missed-wrap',
+   'rs-head', 'rs-title', 'rs-state', 'rs-rating', 'rs-explain', 'rs-explain-body'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // ------------------------------------------------------------- storage
@@ -90,13 +91,12 @@
     if (shown <= L.okRisk) return 'good';
     return shown <= L.maxRisk ? 'warn' : 'bad';
   }
-  /* RS Rating: 80+ is what a leader looks like, 70 the floor worth watching,
-     below that the market is telling you it prefers something else. */
+  /* RS Rating bands: 70+ is the level worth owning, 50-70 is middling, and
+     under 50 means the market is actively preferring other stocks. */
   function rsClass(v) {
-    var c = (state.data && state.data.config) || {};
     if (v == null) return '';
-    if (v >= (c.preferred_rs_rating || 80)) return 'good';
-    return v >= (c.min_rs_rating || 70) ? 'warn' : 'bad';
+    if (v >= 70) return 'good';
+    return v >= 50 ? 'warn' : 'bad';
   }
 
   function rrClass(v) {
@@ -381,6 +381,7 @@
       rsRating: state.current && state.current.rs_rating,
       benchmark: (state.data && state.data.benchmark) || 'SPY'
     });
+    renderRSHead(series, bars);
     el['chart-legend'].innerHTML =
       (state.months === 'base'
         ? '<span>Base view - scaled to the consolidations, so the longer averages sit off-chart</span>'
@@ -396,6 +397,87 @@
           legendItem(VCPChart.COLORS.rsMa, 'RS 21d avg')
         : '');
   }
+  /* The RS heading and the explainer beneath the chart.
+
+     Both read off the same window the chart is drawing, so the wording always
+     describes what is actually on screen rather than the full history. */
+  function renderRSHead(series, bars) {
+    var rating = state.current && state.current.rs_rating;
+    var bench = (state.data && state.data.config && state.data.config.benchmark) || 'SPY';
+    var rs = series.rs, rsma = series.rsma;
+    if (!rs || !rs.length) { el['rs-head'].hidden = true; el['rs-explain'].hidden = true; return; }
+    el['rs-head'].hidden = false;
+    el['rs-explain'].hidden = false;
+
+    var n = Math.min(bars || rs.length, rs.length);
+    var from = rs.length - n;
+    var last = null, lastMa = null;
+    for (var i = rs.length - 1; i >= from; i--) {
+      if (last == null && rs[i] != null) last = rs[i];
+      if (lastMa == null && rsma && rsma[i] != null) lastMa = rsma[i];
+      if (last != null && lastMa != null) break;
+    }
+    // Is the line making new ground against the market, or rolling over?
+    var windowMax = -Infinity;
+    for (var j = from; j < rs.length; j++) {
+      if (rs[j] != null && rs[j] > windowMax) windowMax = rs[j];
+    }
+    var beating = last != null && lastMa != null && last >= lastMa;
+    var atHigh = last != null && isFinite(windowMax) && last >= windowMax * 0.999;
+
+    el['rs-title'].textContent = 'RS Line vs ' + bench;
+    var state_txt = beating ? 'Beating the market' : 'Lagging the market';
+    if (beating && atHigh) state_txt = 'Beating the market · at a new high for this window';
+    el['rs-state'].textContent = state_txt;
+    el['rs-state'].className = 'rs-state ' + (beating ? 'good' : 'bad');
+
+    el['rs-rating'].innerHTML = rating == null
+      ? '<span class="rs-num">--</span><span class="rs-cap">RS RATING</span>'
+      : '<span class="rs-num ' + rsClass(rating) + '">' + rating +
+        '</span><span class="rs-cap">RS RATING</span>';
+
+    el['rs-explain-body'].innerHTML = rsExplainer(rating, bench, beating, atHigh);
+  }
+
+  function rsExplainer(rating, bench, beating, atHigh) {
+    var band = rating == null ? null
+      : rating >= 70 ? 'strong' : rating >= 50 ? 'middling' : 'weak';
+    var ratingLine = rating == null
+      ? '<p>No RS Rating - this stock lacks the full year of history the ranking needs.</p>'
+      : '<p><strong>RS Rating ' + rating + '</strong> means it outperformed <strong>' +
+        rating + '% of every stock in the scan</strong> over the past year, with the most ' +
+        'recent quarter counted double so a stock that has just started moving ranks above ' +
+        'one coasting on old gains. ' +
+        (band === 'strong'
+          ? 'That is the range worth owning - leaders live at 80-99.'
+          : band === 'middling'
+          ? 'That is middling: it is not being sold, but the market is not choosing it either.'
+          : 'That is weak - the market is actively preferring other stocks.') + '</p>';
+
+    return ratingLine +
+      '<p><strong>The RS line</strong> is this stock priced in units of ' + bench +
+      '. Its level means nothing on its own - only its direction. Rising means the stock is ' +
+      'gaining ground on the market, falling means it is losing ground, and it can rise even ' +
+      'while the price falls, if the stock is falling less than everything else.</p>' +
+      '<p><strong>Blue</strong> is the line above its 21-day average - the strength is ' +
+      'holding. <strong>Purple</strong> is below it - the edge is fading. <strong>Orange' +
+      '</strong> is that average.</p>' +
+      '<p>The two answer different questions. The rating is <em>how strong right now</em>, ' +
+      'ranked against everything else. The line is <em>has this been consistent, or was it ' +
+      'one spike?</em> A stock can hit RS 99 on a single news day and collapse; the line ' +
+      'would show the trend was weak all along.</p>' +
+      (atHigh
+        ? '<p class="rs-note">The line is at a new high for this window - the stock is ' +
+          'becoming more dominant over the market, which often precedes a move. It is a ' +
+          'reason to watch, not to buy: wait for the pivot breakout.</p>'
+        : !beating
+        ? '<p class="rs-note">The line is below its average. If the price has been rising ' +
+          'while this falls, institutions may be selling quietly into the strength.</p>'
+        : '') +
+      '<p class="rs-note">RS is one factor, never the trade on its own. A stock can carry ' +
+      'RS 99 while the broad market is in Stage 4, and then fall with everything else.</p>';
+  }
+
   function setCollapsed(on) {
     state.collapsed = on;
     el['chart-panel'].classList.toggle('is-collapsed', on);

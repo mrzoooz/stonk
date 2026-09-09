@@ -5,7 +5,7 @@
    that had opened the app once kept serving that build forever - new features
    never arrived. These files are small and unhashed, so being correct about
    freshness matters more than saving a few milliseconds. */
-var VERSION = 'vcp-v8';
+var VERSION = 'vcp-v9';
 var SHELL = [
   './', 'index.html', 'styles.css', 'app.js', 'chart.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'

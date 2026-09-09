@@ -94,10 +94,23 @@
             <button class="range" data-interval="weekly">Weekly</button>
           </div>
         </div>
+        <!-- The RS heading lives in its own row above the canvas: drawn on
+             the canvas it was overlapped by the RS line itself. -->
+        <div class="rs-head" id="rs-head" hidden>
+          <div class="rs-meta">
+            <div class="rs-title" id="rs-title">RS Line vs SPY</div>
+            <div class="rs-state" id="rs-state"></div>
+          </div>
+          <div class="rs-rating" id="rs-rating"></div>
+        </div>
         <div class="chart-wrap" id="chart-wrap">
           <canvas id="chart"></canvas>
           <div id="chart-legend" class="legend"></div>
         </div>
+        <details class="rs-explain" id="rs-explain">
+          <summary>What am I looking at?</summary>
+          <div class="rs-explain-body" id="rs-explain-body"></div>
+        </details>
       </div>
     </section>
 

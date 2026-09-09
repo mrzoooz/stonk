@@ -11,7 +11,7 @@
     pivot: '#ef4444', support: '#22c55e',
     rsUp: '#3b82f6', rsDown: '#a855f7', rsMa: '#f59e0b',
     grid: '#24303d', text: '#8b9bb0', volUp: '#1f6f3f', volDown: '#7f2b2b',
-    warn: '#f59e0b'
+    warn: '#f59e0b', depth: '#ffffff'
   };
 
   function niceTicks(min, max, count) {
@@ -74,6 +74,16 @@
     var dow = (d.getUTCDay() + 6) % 7;        // Monday = 0
     d.setUTCDate(d.getUTCDate() - dow);
     return d.toISOString().slice(0, 10);
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
   }
 
   function fmtPrice(v) {
@@ -203,12 +213,6 @@
           ctx.stroke();
         }
 
-        ctx.font = 'bold 9px -apple-system, sans-serif';
-        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillStyle = COLORS.text;
-        var rsLabel = 'RS LINE vs ' + (opts.benchmark || 'SPY');
-        if (opts.rsRating != null) rsLabel += '   ·   RS RATING ' + opts.rsRating;
-        ctx.fillText(rsLabel, padL + 2, padT + 1);
       }
     }
 
@@ -224,7 +228,7 @@
     });
 
     // --- shade each contraction so the tightening is visible at a glance
-    var lastLabelRight = -Infinity, labelRow = 0;
+    var labels = [];
     (opts.contractions || []).forEach(function (c, idx) {
       var a = c.high_idx - from, b = c.low_idx - from;
       if (b < 0 || a > n) return;
@@ -236,30 +240,7 @@
       ctx.fillStyle = c.widened ? 'rgba(245,158,11,' + (shade + 0.06) + ')'
                                 : 'rgba(56,189,248,' + shade + ')';
       ctx.fillRect(x0, priceTop, Math.max(x1 - x0, 1), priceH);
-      // Label each consolidation with its number and how deep it was - the
-      // shrinking sequence is the whole point of the pattern.
-      var mid = (x0 + x1) / 2;
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 10px -apple-system, sans-serif';
-      var label = c.depth_pct != null ? c.depth_pct.toFixed(1) + '%' : '';
-      var width = Math.max(ctx.measureText(label).width, 16);
-      // Narrow neighbouring bands would print their labels on top of each
-      // other, so stagger onto a second line instead.
-      labelRow = (mid - width / 2 < lastLabelRight + 3) ? (labelRow + 1) % 2 : 0;
-      lastLabelRight = mid + width / 2;
-      var top = priceTop + 9 + labelRow * 24;
-      // The pivot line often runs straight through this text, so lay a chip
-      // behind it.
-      var chipW = Math.max(width, 20) + 8;
-      ctx.fillStyle = 'rgba(11,15,20,.72)';
-      ctx.fillRect(mid - chipW / 2, top - 9, chipW, label ? 23 : 11);
-      ctx.fillStyle = COLORS.text;
-      ctx.fillText('T' + c.index, mid, top);
-      if (label) {
-        ctx.fillStyle = c.widened ? COLORS.warn : COLORS.up;
-        ctx.fillText(label, mid, top + 12);
-      }
-      ctx.font = '10px -apple-system, sans-serif';
+      labels.push({ mid: (x0 + x1) / 2, c: c });
     });
 
     // --- volume pane
@@ -322,6 +303,42 @@
     }
     level(opts.pivot, COLORS.pivot, 'PIVOT ' + fmtPrice(opts.pivot || 0));
     level(opts.support, COLORS.support, 'SUPPORT ' + fmtPrice(opts.support || 0));
+
+    // --- contraction labels, painted last so nothing crosses them
+    var lastLabelRight = -Infinity, labelRow = 0;
+    labels.forEach(function (item) {
+      var c = item.c;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 10px -apple-system, sans-serif';
+      var label = c.depth_pct != null ? c.depth_pct.toFixed(1) + '%' : '';
+      var tName = 'T' + c.index;
+      var width = Math.max(ctx.measureText(label).width,
+                           ctx.measureText(tName).width, 16);
+      var chipW = width + 10;
+      // Keep the chip inside the plot: a first or last consolidation sitting
+      // at the edge would otherwise print half its label off-canvas.
+      var mid = Math.min(Math.max(item.mid, padL + chipW / 2),
+                         padL + plotW - chipW / 2);
+      // Narrow neighbouring bands would stack their labels, so alternate rows.
+      labelRow = (mid - chipW / 2 < lastLabelRight + 3) ? (labelRow + 1) % 2 : 0;
+      lastLabelRight = mid + chipW / 2;
+      var top = priceTop + 6 + labelRow * 26;
+      var chipH = label ? 25 : 14;
+      // Nearly opaque: the pivot and support rules run right through here.
+      ctx.fillStyle = 'rgba(11,15,20,.92)';
+      roundRect(ctx, mid - chipW / 2, top, chipW, chipH, 4);
+      ctx.fill();
+      ctx.fillStyle = COLORS.text;
+      ctx.fillText(tName, mid, top + 7);
+      if (label) {
+        // White, not green: the support line is green now and the depth
+        // reading has to stand apart from every line on the chart.
+        ctx.fillStyle = c.widened ? COLORS.warn : COLORS.depth;
+        ctx.fillText(label, mid, top + 18);
+      }
+    });
+    ctx.font = '10px -apple-system, sans-serif';
 
     // --- date axis: first, middle, last
     ctx.fillStyle = COLORS.text; ctx.font = '9px -apple-system, sans-serif';
