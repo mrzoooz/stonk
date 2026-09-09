@@ -4,6 +4,11 @@ name: Audit data
 # stale symbols and unadjusted split steps.
 on:
   workflow_dispatch:
+    inputs:
+      explain:
+        description: "Print the contraction walk for one symbol instead of the audit"
+        required: false
+        default: ""
 
 jobs:
   audit:
@@ -30,6 +35,12 @@ jobs:
           key: scan-output-
           restore-keys: |
             scan-output-
-      - run: python tools/audit_data.py
+      - name: Explain one symbol
+        if: github.event.inputs.explain != ''
+        run: python -m screener.run --no-fetch --explain "${{ github.event.inputs.explain }}"
+
+      - name: Audit the cache
+        if: github.event.inputs.explain == ''
+        run: python tools/audit_data.py
         env:
           PYTHONPATH: .
