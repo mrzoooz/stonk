@@ -411,8 +411,11 @@ def detect(df: pd.DataFrame, cfg: dict) -> VCPResult:
     # it's not a perfect VCP." Recorded, not disqualifying.
     metrics["perfect_vcp"] = not inside
 
+    # Same comparability bar as above: a shallow wobble the walk stepped over
+    # is not worth reporting as a volume flag against the base.
     heavier = [
-        c for c in volume_breaks if first.high_idx <= c.high_idx <= final.low_idx
+        c for c in volume_breaks
+        if first.high_idx <= c.high_idx <= final.low_idx and _comparable(c)
     ]
     metrics["volume_rose_pauses"] = [
         {"date": c.high_date, "depth_pct": round(c.depth_pct, 2)} for c in heavier
