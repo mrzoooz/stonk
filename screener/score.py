@@ -26,7 +26,7 @@ def _scale(value: float, lo: float, hi: float, invert: bool = False) -> float:
 COMPONENTS = (
     # (key, weight, lo, hi, invert)
     ("reward_risk", 0.26, 2.0, 10.0, False),
-    ("risk_pct", 0.18, 1.0, 5.0, True),
+    ("risk_pct", 0.18, 1.0, 8.0, True),
     ("final_depth_pct", 0.14, 2.0, 12.0, True),
     ("volume_dryup_ratio", 0.14, 0.30, 0.90, True),
     ("contraction_count", 0.10, 2.0, 4.0, False),

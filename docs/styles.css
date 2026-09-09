@@ -98,6 +98,9 @@ h3 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppe
 .metric .v { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .metric .v.good { color: var(--green); }
 .metric .v.warn { color: var(--amber); }
+.metric .v.bad  { color: var(--red); }
+.caveat { grid-column: 1 / -1; margin: 10px 0 0; font-size: 12px; color: var(--amber);
+          line-height: 1.45; }
 
 /* The contraction ladder: one bar per T, width proportional to its depth. */
 .ladder { display: grid; gap: 3px; margin-top: 10px; }

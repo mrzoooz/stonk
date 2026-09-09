@@ -323,7 +323,9 @@ def main(argv: list[str] | None = None) -> int:
         "watch_reasons": summarise_reasons(watch),
         "config": {
             "max_risk_pct": cfg.get_path("risk.max_risk_pct"),
+            "preferred_max_risk_pct": cfg.get_path("risk.preferred_max_risk_pct"),
             "min_reward_risk": cfg.get_path("risk.min_reward_risk"),
+            "preferred_reward_risk": cfg.get_path("risk.preferred_reward_risk"),
             "min_contractions": cfg.get_path("vcp.min_contractions"),
             "final_depth_pct": [
                 cfg.get_path("vcp.final_depth_min_pct"),

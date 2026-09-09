@@ -63,6 +63,38 @@
     if (a >= 1e6) return '$' + (v / 1e6).toFixed(0) + 'M';
     return '$' + v.toFixed(0);
   }
+  // Thresholds come from the scan's config, so the colours can never drift
+  // from the rules that produced the numbers.
+  function limits() {
+    var c = (state.data && state.data.config) || {};
+    return {
+      maxRisk: c.max_risk_pct == null ? 8 : c.max_risk_pct,
+      okRisk: c.preferred_max_risk_pct == null ? 5 : c.preferred_max_risk_pct,
+      minRR: c.min_reward_risk == null ? 2 : c.min_reward_risk,
+      okRR: c.preferred_reward_risk == null ? 3 : c.preferred_reward_risk
+    };
+  }
+
+  /* Green at or better than preferred, amber inside the accepted band.
+
+     Classified on the rounded value that is actually displayed: a reward:risk
+     of 2.97 shows as "3.0", and colouring that amber against a "3+ is green"
+     rule reads as a bug rather than a borderline number. */
+  function riskClass(v) {
+    var L = limits();
+    if (v == null || isNaN(v)) return '';
+    var shown = Number(Number(v).toFixed(1));
+    if (shown <= L.okRisk) return 'good';
+    return shown <= L.maxRisk ? 'warn' : 'bad';
+  }
+  function rrClass(v) {
+    var L = limits();
+    if (v == null || isNaN(v)) return '';
+    var shown = Number(Number(v).toFixed(1));
+    if (shown >= L.okRR) return 'good';
+    return shown >= L.minRR ? 'warn' : 'bad';
+  }
+
   var STATUS_LABEL = {
     actionable: 'In buy zone',
     broke_out: 'Missed - pivot already broken',
@@ -141,8 +173,8 @@
     var metrics = hasVcp ? [
       ['Pivot', num(v.pivot), ''],
       ['Stop', num(v.support), ''],
-      ['Risk', pct(v.risk_pct), v.risk_pct != null && v.risk_pct <= 5 ? 'good' : 'warn'],
-      ['R:R', v.reward_risk == null ? '--' : v.reward_risk.toFixed(1), v.reward_risk >= 3 ? 'good' : 'warn']
+      ['Risk', pct(v.risk_pct), riskClass(v.risk_pct)],
+      ['R:R', v.reward_risk == null ? '--' : v.reward_risk.toFixed(1), rrClass(v.reward_risk)]
     ] : [
       ['50MA', num(s.ma50), ''],
       ['150MA', num(s.ma150), ''],
@@ -350,18 +382,37 @@
         (row.vcp_reason ? ' ' + escapeHTML(row.vcp_reason) + '.' : '') + '</p>';
       return;
     }
+    var L = limits();
     var cells = [
-      ['Buy above', num(v.pivot)],
-      ['Stop', num(v.support)],
-      ['Target', num(v.target)],
-      ['Risk', pct(v.risk_pct)],
-      ['Reward:risk', v.reward_risk == null ? '--' : '1 : ' + v.reward_risk.toFixed(1)],
-      ['From pivot', pct(v.distance_to_pivot_pct)]
+      ['Buy above', num(v.pivot), ''],
+      ['Stop', num(v.support), ''],
+      ['Target', num(v.target), ''],
+      ['Risk', pct(v.risk_pct), riskClass(v.risk_pct)],
+      ['Reward:risk', v.reward_risk == null ? '--' : '1 : ' + v.reward_risk.toFixed(1),
+       rrClass(v.reward_risk)],
+      ['From pivot', pct(v.distance_to_pivot_pct), '']
     ];
+
+    // Spell out anything inside the accepted band but short of preferred, so a
+    // wider stop or a thinner payoff is a decision rather than an oversight.
+    var caveats = [];
+    if (v.risk_pct != null && Number(v.risk_pct.toFixed(1)) > L.okRisk) {
+      caveats.push('Risk of ' + pct(v.risk_pct) + ' is above the ' + pct(L.okRisk, 0) +
+        ' you want. The stop is wider than ideal, so size the position down or wait' +
+        ' for a tighter pivot.');
+    }
+    if (v.reward_risk != null && Number(v.reward_risk.toFixed(1)) < L.okRR) {
+      caveats.push('Reward:risk of 1 : ' + v.reward_risk.toFixed(1) + ' is below the 1 : ' +
+        L.okRR + ' you want. It clears the 1 : ' + L.minRR + ' minimum, but the payoff is thin.');
+    }
+
     el.plan.innerHTML = '<h3>Trade plan</h3><div class="plan-grid">' +
       cells.map(function (c) {
-        return '<div class="metric"><div class="k">' + c[0] + '</div><div class="v">' + c[1] + '</div></div>';
+        return '<div class="metric"><div class="k">' + c[0] + '</div><div class="v ' + c[2] +
+               '">' + c[1] + '</div></div>';
       }).join('') +
+      (caveats.length
+        ? '<p class="caveat">' + caveats.map(escapeHTML).join(' ') + '</p>' : '') +
       '</div><p class="plan-note">Buy on a break above ' + num(v.pivot) +
       ' on surging volume. The stop sits at the last consolidation low (' + num(v.support) +
       '), which is the low the pattern says should not be broken. Target is the measured move: pivot plus the base’s own depth (' +
@@ -403,9 +454,15 @@
               ? ' (last 5d ' + v.recent_volume_vs_50d.toFixed(2) + '×)' : '')],
       ['Support has held', v.bars_since_support != null && v.bars_since_support >= 3,
        (v.bars_since_support || 0) + ' bars since the low'],
-      ['Risk at or under ' + pct(cfg.max_risk_pct, 0), v.risk_pct != null && v.risk_pct <= (cfg.max_risk_pct || 5), pct(v.risk_pct)],
-      ['Reward:risk at least ' + (cfg.min_reward_risk || 3), v.reward_risk != null && v.reward_risk >= (cfg.min_reward_risk || 3),
-       v.reward_risk == null ? '--' : '1 : ' + v.reward_risk.toFixed(1)],
+      ['Risk at or under ' + pct(cfg.max_risk_pct, 0),
+       v.risk_pct != null && v.risk_pct <= (cfg.max_risk_pct || 8),
+       pct(v.risk_pct) + (v.risk_pct != null && v.risk_pct > limits().okRisk
+         ? ' - over the ' + pct(limits().okRisk, 0) + ' you prefer' : '')],
+      ['Reward:risk at least ' + (cfg.min_reward_risk || 2),
+       v.reward_risk != null && v.reward_risk >= (cfg.min_reward_risk || 2),
+       (v.reward_risk == null ? '--' : '1 : ' + v.reward_risk.toFixed(1)) +
+       (v.reward_risk != null && v.reward_risk < limits().okRR
+         ? ' - under the 1 : ' + limits().okRR + ' you prefer' : '')],
       ['Pivot not broken yet', v.pivot_broken === false,
        v.high_since_support == null ? '--'
          : 'high since low ' + num(v.high_since_support) + ' vs pivot ' + num(v.pivot)],

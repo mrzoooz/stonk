@@ -141,11 +141,19 @@ vcp:
 # Risk / reward.
 # ---------------------------------------------------------------------------
 risk:
-  # Risk = (pivot - support) / pivot. This is the hard 5% ceiling.
-  max_risk_pct: 5.0
+  # Risk = (pivot - support) / pivot.
+  #
+  # Two tiers. The hard ceiling rejects a setup outright; the preferred ceiling
+  # is what a good setup looks like. Anything between the two is shown but
+  # marked subpar, in amber rather than green, so a wider stop is a deliberate
+  # choice rather than something that slips through unnoticed.
+  max_risk_pct: 8.0
+  preferred_max_risk_pct: 5.0
+
   # Reward target: measured move = pivot + (base high - base low).
   target_method: measured_move
-  min_reward_risk: 3.0
+  min_reward_risk: 2.0
+  preferred_reward_risk: 3.0
 
 output:
   # Series data (for the charts) is written for at most this many names.
