@@ -9,6 +9,10 @@ on:
         description: "Print the contraction walk for one symbol instead of the audit"
         required: false
         default: ""
+      rs:
+        description: "Show how the RS Rating was arrived at for these symbols"
+        required: false
+        default: ""
 
 jobs:
   audit:
@@ -39,14 +43,20 @@ jobs:
         if: github.event.inputs.explain != ''
         run: python -m screener.run --no-fetch --explain "${{ github.event.inputs.explain }}"
 
+      - name: Explain an RS Rating
+        if: github.event.inputs.rs != ''
+        run: python tools/rs_check.py ${{ github.event.inputs.rs }}
+        env:
+          PYTHONPATH: .
+
       - name: Verify every base against the rules
-        if: github.event.inputs.explain == ''
+        if: github.event.inputs.explain == '' && github.event.inputs.rs == ''
         run: python tools/verify_screen.py
         env:
           PYTHONPATH: .
 
       - name: Audit the cache
-        if: github.event.inputs.explain == ''
+        if: github.event.inputs.explain == '' && github.event.inputs.rs == ''
         run: python tools/audit_data.py
         env:
           PYTHONPATH: .
