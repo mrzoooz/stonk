@@ -392,6 +392,7 @@ def main(argv: list[str] | None = None) -> int:
             "min_reward_risk": cfg.get_path("risk.min_reward_risk"),
             "preferred_reward_risk": cfg.get_path("risk.preferred_reward_risk"),
             "benchmark": cfg.get_path("data.benchmark"),
+            "quotes_url": cfg.get_path("output.quotes_url"),
             "min_rs_rating": cfg.get_path("stage2.min_rs_rating"),
             "early_stage2_max_bars": cfg.get_path("stage2.early_stage2_max_bars"),
             "preferred_rs_rating": cfg.get_path("stage2.preferred_rs_rating"),

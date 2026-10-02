@@ -43,19 +43,24 @@ jobs:
         env:
           PYTHONPATH: .
 
-      - name: Commit quotes
+      # Published to a standalone branch that is force-replaced each run, not
+      # to this one. Two reasons: a 5-minute commit would add ~80 commits a
+      # day to the branch history, and it would race the nightly scan's own
+      # commit. The branch holds exactly one file and one commit.
+      - name: Publish quotes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          test -s state/quotes.json || { echo "no quotes written"; exit 1; }
+          work=$(mktemp -d)
+          cp state/quotes.json "$work/quotes.json"
+          cd "$work"
+          git init -q
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- state/quotes.json; then
-            echo "no change"
-            exit 0
-          fi
-          git add state/quotes.json
-          git commit -m "Intraday quotes $(date -u +%H:%M) UTC"
-          # The nightly scan commits here too; rebase rather than fail the run.
-          for i in 1 2 3; do
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && break
-            sleep 5
-          done
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git add quotes.json
+          git commit -qm "Quotes $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push -q --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
+            HEAD:refs/heads/quotes-feed
+          echo "published to quotes-feed"

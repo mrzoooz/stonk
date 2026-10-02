@@ -242,6 +242,11 @@ risk:
   breakeven_move_pct: 5.0
 
 output:
+  # Where the app reads intraday prices from. The quotes workflow force-pushes
+  # a single-file branch; raw.githubusercontent serves it with permissive CORS
+  # so the page can fetch it without a Pages rebuild.
+  quotes_url: "https://raw.githubusercontent.com/mrzoooz/stonk/quotes-feed/quotes.json"
+
   # Series data (for the charts) is written for at most this many names.
   max_series: 400
   # Two years of sessions, so the weekly chart has ~104 candles to show.

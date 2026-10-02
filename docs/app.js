@@ -9,6 +9,9 @@
   var CHART_KEY = 'vcp.chart';
   var MISSED_KEY = 'vcp.hideMissed';
   var EARLY_KEY = 'vcp.earlyOnly';
+  // The intraday feed is refreshed by a workflow on roughly a 5-minute cycle;
+  // polling it faster than that only burns battery.
+  var QUOTE_POLL_MS = 150000;
 
   var state = {
     data: null,
@@ -22,7 +25,9 @@
     collapsed: false,
     expanded: false,
     hideMissed: true,
-    earlyOnly: false
+    earlyOnly: false,
+    quotes: null,
+    quotesAt: null
   };
 
   // Roughly how many bars make up a month at each interval.
@@ -207,10 +212,15 @@
   }
 
   function cardHTML(row) {
+    var liveQ = quoteFor(row.symbol);
     var m = metricsOf(row);
     var v = m.vcp, s = m.s2;
     var status = (row.vcp && row.vcp.status) || 'none';
     var hasVcp = v.pivot != null;
+    var cardChg = liveQ && liveQ.change_pct != null ? liveQ.change_pct : row.change_pct;
+    // A name that was actionable at the close but has traded through its pivot
+    // since is a missed entry now, whatever last night's scan concluded.
+    if (liveQ && liveQ.through_pivot && status === 'actionable') status = 'broke_out';
 
     var metrics = hasVcp ? [
       ['Pivot', num(v.pivot), ''],
@@ -229,10 +239,11 @@
         '<div class="card-top">' +
           '<span class="sym">' + row.symbol + '</span>' +
           '<span class="pill ' + status + '">' + (STATUS_LABEL[status] || status) + '</span>' +
-          '<span class="price">' + num(row.price) +
-            (row.change_pct != null && !isNaN(row.change_pct)
-              ? ' <span class="chg ' + (row.change_pct >= 0 ? 'up' : 'down') + '">' +
-                (row.change_pct >= 0 ? '+' : '') + row.change_pct.toFixed(1) + '%</span>'
+          '<span class="price' + (liveQ ? ' is-live' : '') + '">' +
+            num(liveQ ? liveQ.price : row.price) +
+            (cardChg != null && !isNaN(cardChg)
+              ? ' <span class="chg ' + (cardChg >= 0 ? 'up' : 'down') + '">' +
+                (cardChg >= 0 ? '+' : '') + cardChg.toFixed(1) + '%</span>'
               : '') +
           '</span>' +
           '<button class="star ' + (isStarred(row.symbol) ? 'on' : '') + '" data-star="' + row.symbol +
@@ -314,12 +325,16 @@
 
     // Price stays in the header so it is still on screen once you scroll down
     // to the plan and the checklists.
-    el['d-price'].textContent = num(row.price);
-    var chg = row.change_pct;
+    var q = quoteFor(sym);
+    var shown = q ? q.price : row.price;
+    var chg = q && q.change_pct != null ? q.change_pct : row.change_pct;
+    el['d-price'].textContent = num(shown);
     var v0 = (row.vcp && row.vcp.metrics) || {};
     var parts = [];
     if (chg != null && !isNaN(chg)) parts.push((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%');
-    parts.push((row.date || '').slice(5) + ' close');
+    // Never let an intraday price pass for a close, or the reverse.
+    parts.push(q ? ('intraday · ' + (quoteAge() || 'recent'))
+                 : ((row.date || '').slice(5) + ' close'));
     el['d-change'].textContent = parts.join(' \u00b7 ');
     el['d-change'].className = chg == null || isNaN(chg) ? '' : (chg >= 0 ? 'up' : 'down');
 
@@ -327,7 +342,7 @@
     // repeated in the chart's own bar, where they stay visible.
     el['chart-title'].textContent = row.symbol;
     el['chart-price'].innerHTML =
-      '<b>' + num(row.price) + '</b>' +
+      '<b>' + num(shown) + '</b>' +
       '<span class="' + (chg == null || isNaN(chg) ? '' : (chg >= 0 ? 'up' : 'down')) + '">' +
       escapeHTML(parts.join(' \u00b7 ')) + '</span>';
     el['d-star'].textContent = isStarred(sym) ? '★' : '☆';
@@ -537,6 +552,45 @@
     out.push('<p>' + combo + '</p>');
 
     return out.join('');
+  }
+
+  /* Intraday prices for the published names.
+
+     The pattern cannot move during the session - base, pivot, support and
+     targets all come from completed daily bars - so this updates the price
+     against the pivot and nothing else. Failure is silent and harmless: the
+     app simply keeps showing the close it was built with. */
+  function loadQuotes() {
+    var url = state.data && state.data.config && state.data.config.quotes_url;
+    if (!url) return;
+    // raw.githubusercontent caches for ~5 minutes; the buster gets the file
+    // that the last workflow run actually wrote.
+    fetch(url + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.quotes) return;
+        state.quotes = d.quotes;
+        state.quotesAt = d.generated_at || null;
+        render();
+        // Re-open the sheet in place so its header price updates too. Cheap,
+        // and it keeps one code path for rendering the detail view.
+        if (state.current && !el.detail.hidden) openDetail(state.current.symbol);
+      })
+      .catch(function () {});
+  }
+
+  function quoteFor(sym) {
+    return (state.quotes && state.quotes[sym]) || null;
+  }
+
+  /* How stale the intraday price is, in plain words. Shown rather than hidden:
+     a number that looks live but is twenty minutes old is worse than one
+     labelled twenty minutes old. */
+  function quoteAge() {
+    if (!state.quotesAt) return null;
+    var mins = Math.round((Date.now() - new Date(state.quotesAt).getTime()) / 60000);
+    if (!isFinite(mins) || mins < 0) return null;
+    return mins < 1 ? 'just now' : mins + ' min ago';
   }
 
   function setCollapsed(on) {
@@ -822,10 +876,16 @@
         updateCounts();
         render();
         var as = data.as_of || '?';
+        var age = quoteAge();
         el.status.textContent = 'Data through ' + as + ' · ' +
-          data.universe_size.toLocaleString() + ' symbols scanned';
+          data.universe_size.toLocaleString() + ' symbols scanned' +
+          (age ? ' · prices ' + age : '');
         el['foot-note'].textContent = 'Scan ran ' + (data.generated_at || '').replace('T', ' ').replace('+00:00', ' UTC') +
-          '. Daily bars only - this is a nightly screen, not a live quote feed. Not investment advice.';
+          '. The pattern - base, pivot, stop, targets - comes from completed daily bars and is ' +
+          'fixed until tonight. Prices refresh during market hours on about a five-minute cycle ' +
+          'and may be delayed at source, so treat them as roughly current, not live. ' +
+          'Not investment advice.';
+        loadQuotes();
       })
       .catch(function (err) {
         el.status.classList.add('err');
@@ -947,6 +1007,15 @@
     if (savedEarly !== null) state.earlyOnly = savedEarly === '1';
   } catch (e) {}
   el['early-only'].checked = state.earlyOnly;
+
+  // Only while the tab is visible: a backgrounded phone should not be
+  // fetching, and coming back to the app refreshes immediately anyway.
+  setInterval(function () {
+    if (!document.hidden) loadQuotes();
+  }, QUOTE_POLL_MS);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) loadQuotes();
+  });
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

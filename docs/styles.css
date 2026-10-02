@@ -266,3 +266,11 @@ table.t tr.widened td { color: var(--amber); }
 .rs-explain-body p { margin: 8px 0; }
 .rs-explain-body strong { color: var(--text); }
 .rs-explain-body .rs-note { color: var(--amber); }
+
+
+/* An intraday price, as opposed to last night's close. */
+.price.is-live { position: relative; }
+.price.is-live::after { content: ''; position: absolute; top: -1px; right: -7px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+.quote-note { font-size: 11px; color: var(--muted); padding: 2px 4px 0; }
+.quote-note.stale { color: var(--amber); }
