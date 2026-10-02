@@ -167,3 +167,19 @@ def rs_ratings(scores: dict[str, float]) -> dict[str, int]:
         pct = i / (n - 1) if n > 1 else 1.0
         out[sym] = int(min(99, max(1, round(pct * 98) + 1)))
     return out
+
+
+def trailing_streak(mask: pd.Series) -> int:
+    """How many sessions, counting back from the last, the mask stayed true.
+
+    0 means it is not true today. Used to age the Stage 2 moving-average
+    stack: a stock whose 50 > 150 > 200 only became true a few weeks ago is at
+    the start of its advance, which is a different proposition from one that
+    has been stacked for a year and may already have run.
+    """
+    vals = mask.to_numpy(dtype=bool)
+    if vals.size == 0 or not vals[-1]:
+        return 0
+    # Index of the most recent false; everything after it is the streak.
+    false_idx = np.flatnonzero(~vals)
+    return int(vals.size) if false_idx.size == 0 else int(vals.size - 1 - false_idx[-1])

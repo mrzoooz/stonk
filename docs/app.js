@@ -8,6 +8,7 @@
   var CALC_KEY = 'vcp.calc';
   var CHART_KEY = 'vcp.chart';
   var MISSED_KEY = 'vcp.hideMissed';
+  var EARLY_KEY = 'vcp.earlyOnly';
 
   var state = {
     data: null,
@@ -20,7 +21,8 @@
     interval: 'daily',
     collapsed: false,
     expanded: false,
-    hideMissed: true
+    hideMissed: true,
+    earlyOnly: false
   };
 
   // Roughly how many bars make up a month at each interval.
@@ -33,7 +35,7 @@
    'chart-wrap', 'calc-card', 'interval-row', 'chart-controls',
    'chart-panel', 'chart-collapse', 'chart-expand', 'chart-body',
    'd-price', 'd-change', 'chart-price', 'chart-title',
-   'hide-missed', 'hide-missed-wrap',
+   'hide-missed', 'hide-missed-wrap', 'early-only', 'early-only-wrap',
    'rs-head', 'rs-title', 'rs-state', 'rs-rating', 'rs-explain', 'rs-explain-body'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
@@ -129,6 +131,13 @@
     return d[tab] || [];
   }
 
+  /* Sessions the 50 > 150 > 200 stack has held. Full rows carry it under
+     stage2.metrics, thinned Stage 2-only rows under a flat `metrics`. */
+  function stackAge(row) {
+    var m = (row.stage2 && row.stage2.metrics) || row.metrics || {};
+    return m.stack_age_bars == null ? null : m.stack_age_bars;
+  }
+
   function metricsOf(row) {
     // Full rows carry vcp+stage2; thinned Stage 2 rows carry a flat `metrics`.
     var vcp = (row.vcp && row.vcp.metrics) || {};
@@ -166,6 +175,16 @@
     if (state.hideMissed) {
       rows = rows.filter(function (r) {
         return !(r.vcp && r.vcp.status === 'broke_out');
+      });
+    }
+    // Early in Stage 2: the stack has only just formed, so the advance is
+    // young and the base has not blossomed yet.
+    if (state.earlyOnly) {
+      var maxAge = (state.data && state.data.config &&
+                    state.data.config.early_stage2_max_bars) || 60;
+      rows = rows.filter(function (r) {
+        var age = stackAge(r);
+        return age != null && age > 0 && age <= maxAge;
       });
     }
     var q = state.query.trim().toUpperCase();
@@ -245,6 +264,14 @@
     }).length;
     el['hide-missed-wrap'].hidden = missed === 0 && !state.hideMissed;
     el['hide-missed-wrap'].title = missed + ' name(s) here have already broken their pivot';
+    var maxAge = (state.data && state.data.config &&
+                  state.data.config.early_stage2_max_bars) || 60;
+    var early = all.filter(function (r) {
+      var a = stackAge(r);
+      return a != null && a > 0 && a <= maxAge;
+    }).length;
+    el['early-only-wrap'].title = early + ' name(s) here formed their 50 > 150 > 200 stack ' +
+      'within the last ' + maxAge + ' sessions';
     el.list.innerHTML = rows.map(cardHTML).join('');
     el.empty.hidden = rows.length > 0;
     if (!rows.length) {
@@ -722,6 +749,16 @@
     var rs = row.rs_rating;
     // Shown alongside the Stage 2 rules but not one of them: the rating is
     // reported, not yet a gate, so it never silently drops a name.
+    var age = stackAge(row);
+    var maxAge = cfg.early_stage2_max_bars || 60;
+    var ageRow = checkRow([
+      'Stack formed within ' + maxAge + ' sessions',
+      age != null && age > 0 && age <= maxAge,
+      age == null ? 'unknown'
+        : age === 0 ? 'not stacked today'
+        : age + ' sessions (~' + (age / 21).toFixed(1) + ' months) since 50 > 150 > 200 ' +
+          'became true' + (age > maxAge ? ' - the advance is already well under way' : '')
+    ]);
     var rsRow = checkRow([
       'RS Rating ' + okRS + '+ (min ' + minRS + ')',
       rs != null && rs >= minRS,
@@ -731,7 +768,7 @@
     ]);
     el['d-stage2'].innerHTML = s2.checks.map(function (c) {
       return checkRow([c.label, c.passed, c.detail]);
-    }).join('') + rsRow;
+    }).join('') + rsRow + ageRow;
   }
 
   function checkRow(r) {
@@ -829,6 +866,11 @@
     try { localStorage.setItem(MISSED_KEY, state.hideMissed ? '1' : '0'); } catch (e) {}
     render();
   });
+  el['early-only'].addEventListener('change', function () {
+    state.earlyOnly = el['early-only'].checked;
+    try { localStorage.setItem(EARLY_KEY, state.earlyOnly ? '1' : '0'); } catch (e) {}
+    render();
+  });
   el.sort.addEventListener('change', function () { state.sort = el.sort.value; render(); });
   el.refresh.addEventListener('click', function () { load(true); });
   el.back.addEventListener('click', closeDetail);
@@ -899,6 +941,12 @@
     if (savedMissed !== null) state.hideMissed = savedMissed === '1';
   } catch (e) {}
   el['hide-missed'].checked = state.hideMissed;
+
+  try {
+    var savedEarly = localStorage.getItem(EARLY_KEY);
+    if (savedEarly !== null) state.earlyOnly = savedEarly === '1';
+  } catch (e) {}
+  el['early-only'].checked = state.earlyOnly;
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

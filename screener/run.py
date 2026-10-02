@@ -181,7 +181,7 @@ def _thin_row(row: dict) -> dict:
             for k in (
                 "ma50", "ma150", "ma200", "ma150_slope_pct", "ma200_slope_pct",
                 "up_weeks", "down_weeks", "beta", "dollar_volume",
-                "rs_126d", "pct_off_52w_high",
+                "rs_126d", "pct_off_52w_high", "stack_age_bars",
             )
         },
         "vcp_reason": (row.get("vcp") or {}).get("reason", ""),
@@ -393,6 +393,7 @@ def main(argv: list[str] | None = None) -> int:
             "preferred_reward_risk": cfg.get_path("risk.preferred_reward_risk"),
             "benchmark": cfg.get_path("data.benchmark"),
             "min_rs_rating": cfg.get_path("stage2.min_rs_rating"),
+            "early_stage2_max_bars": cfg.get_path("stage2.early_stage2_max_bars"),
             "preferred_rs_rating": cfg.get_path("stage2.preferred_rs_rating"),
             "min_contractions": cfg.get_path("vcp.min_contractions"),
             "final_depth_pct": [

@@ -52,6 +52,12 @@ stage2:
   # line is coloured against. 21 sessions is one trading month.
   rs_line_ma: 21
 
+  # How recently the 50 > 150 > 200 stack formed, in sessions. A stock whose
+  # stack is only a few weeks old is early in its advance - the pattern has
+  # not blossomed yet - while one stacked for a year may already have run.
+  # Used by the "Early Stage 2" filter in the app; it never rejects anything.
+  early_stage2_max_bars: 60
+
   # RS Rating: the stock's weighted 12-month performance, percentile-ranked
   # against every stock in the universe. 70 is the floor worth looking at,
   # 80-90+ is what a leader looks like. Reported, not yet a hard filter.

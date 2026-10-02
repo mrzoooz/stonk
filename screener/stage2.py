@@ -214,6 +214,13 @@ def evaluate(
         "market_cap": market_cap,
     }
 
+    # How long the 50 > 150 > 200 stack has held without a break. A stock whose
+    # stack has only just formed is at the start of its advance; one stacked
+    # for a year may already have made its move.
+    stack_mask = (ma_s > ma_m) & (ma_m > ma_l)
+    stack_mask = stack_mask & ma_s.notna() & ma_m.notna() & ma_l.notna()
+    metrics["stack_age_bars"] = ind.trailing_streak(stack_mask)
+
     lo52, hi52 = ind.week52(df)
     metrics["low_52w"] = round(lo52, 4)
     metrics["high_52w"] = round(hi52, 4)

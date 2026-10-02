@@ -51,3 +51,42 @@ def test_market_cap_check_only_appears_when_configured():
     cfg["stage2"]["min_market_cap"] = 2_000_000_000
     res = stage2.evaluate(df, cfg, None, market_cap=5_000_000_000)
     assert _checks(res)["market_cap"]
+
+
+def test_stack_age_counts_sessions_since_the_stack_formed():
+    """The 50 > 150 > 200 stack is aged, so an early advance is separable.
+
+    A stock whose stack formed three weeks ago is at the start of its move; one
+    stacked for a year may already have made it. Both pass Stage 2 identically,
+    so the age is the only thing that tells them apart.
+    """
+    import numpy as np
+    import pandas as pd
+    from screener import stage2 as s2mod
+
+    cfg = load_config()
+    # A long flat stretch (averages tangled), then a clean advance that stacks.
+    n_flat, n_rise = 320, 40
+    flat = np.full(n_flat, 100.0)
+    rise = np.linspace(100.0, 160.0, n_rise)
+    close = np.concatenate([flat, rise])
+    idx = pd.date_range("2024-01-01", periods=len(close), freq="B")
+    df = pd.DataFrame({"open": close, "high": close * 1.01, "low": close * 0.99,
+                       "close": close, "volume": np.full(len(close), 1e6)}, index=idx)
+
+    age = s2mod.evaluate(df, cfg).metrics["stack_age_bars"]
+    # The stack cannot predate the advance, and must have formed inside it.
+    assert 0 < age <= n_rise, age
+
+
+def test_stack_age_is_zero_when_not_stacked_today():
+    import numpy as np
+    import pandas as pd
+    from screener import stage2 as s2mod
+
+    cfg = load_config()
+    close = np.linspace(200.0, 100.0, 300)        # a steady decline
+    idx = pd.date_range("2024-01-01", periods=len(close), freq="B")
+    df = pd.DataFrame({"open": close, "high": close * 1.01, "low": close * 0.99,
+                       "close": close, "volume": np.full(len(close), 1e6)}, index=idx)
+    assert s2mod.evaluate(df, cfg).metrics["stack_age_bars"] == 0
