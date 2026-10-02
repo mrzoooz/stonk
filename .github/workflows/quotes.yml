@@ -1,0 +1,61 @@
+name: Intraday quotes
+
+# Five minutes is the floor GitHub's scheduler offers, and scheduled runs are
+# routinely delayed under load, so treat this as "about every 5-15 minutes
+# during market hours" rather than a guarantee. 13:30-20:00 UTC covers the US
+# session while the east coast is on daylight time.
+on:
+  schedule:
+    - cron: "*/5 13-20 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: quotes
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  quotes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The published lists come from the last scan's output, not from a
+      # rescan: the pattern cannot change during the session.
+      - name: Restore last scan output
+        uses: actions/cache/restore@v4
+        with:
+          path: docs/data
+          key: scan-output-
+          restore-keys: scan-output-
+
+      - name: Refresh quotes
+        run: python tools/refresh_quotes.py
+        env:
+          PYTHONPATH: .
+
+      - name: Commit quotes
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- state/quotes.json; then
+            echo "no change"
+            exit 0
+          fi
+          git add state/quotes.json
+          git commit -m "Intraday quotes $(date -u +%H:%M) UTC"
+          # The nightly scan commits here too; rebase rather than fail the run.
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && break
+            sleep 5
+          done
+          git push origin "HEAD:${GITHUB_REF_NAME}"
