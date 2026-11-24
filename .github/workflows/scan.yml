@@ -143,6 +143,26 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
+      # deploy-pages asks the artifact API for the artifact about half a second
+      # after the upload returns, and that API is not read-your-writes: twice
+      # in two months it answered "no artifacts named github-pages" for a file
+      # that had just uploaded cleanly, failing a scan that had otherwise
+      # worked. Wait for the artifact to actually be visible before deploying.
+      - name: Wait for the Pages artifact to be visible
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 20); do
+            if gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+                 --jq '.artifacts[].name' 2>/dev/null | grep -qx 'github-pages'; then
+              echo "artifact visible after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "artifact never became visible" >&2
+          exit 1
       - id: deployment
         if: github.event.inputs.dry_run != 'true'
         uses: actions/deploy-pages@v4
