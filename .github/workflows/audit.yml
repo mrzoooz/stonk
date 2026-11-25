@@ -60,7 +60,14 @@ jobs:
         if: github.event.inputs.dump_review != ''
         env:
           PYTHONPATH: .
-        run: python tools/dump_for_review.py --top "${{ github.event.inputs.dump_review }}"
+        run: |
+          python tools/dump_for_review.py --top "${{ github.event.inputs.dump_review }}"
+          # Also echoed to the log: artifact downloads redirect to blob
+          # storage, which is not always reachable from where this is read.
+          echo "----BEGIN REVIEW----"
+          cat state/review.json
+          echo
+          echo "----END REVIEW----"
       - name: Upload the review dump
         if: github.event.inputs.dump_review != ''
         uses: actions/upload-artifact@v4
