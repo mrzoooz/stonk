@@ -9,6 +9,10 @@ on:
         description: "Print the contraction walk for one symbol instead of the audit"
         required: false
         default: ""
+      dump_review:
+        description: "Dump trend leaders' swing structure for manual review"
+        required: false
+        default: ""
       rs:
         description: "Show how the RS Rating was arrived at for these symbols"
         required: false
@@ -49,14 +53,30 @@ jobs:
         env:
           PYTHONPATH: .
 
+      - name: Dump names for review
+        if: github.event.inputs.dump_review != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/dump_for_review.py --top "${{ github.event.inputs.dump_review }}"
+          work=$(mktemp -d); cp state/review.json "$work/"
+          cd "$work"; git init -q
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add review.json
+          git commit -qm "Review dump $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push -q --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
+            HEAD:refs/heads/review-dump
+
       - name: Verify every base against the rules
-        if: github.event.inputs.explain == '' && github.event.inputs.rs == ''
+        if: github.event.inputs.explain == '' && github.event.inputs.rs == '' && github.event.inputs.dump_review == ''
         run: python tools/verify_screen.py
         env:
           PYTHONPATH: .
 
       - name: Audit the cache
-        if: github.event.inputs.explain == '' && github.event.inputs.rs == ''
+        if: github.event.inputs.explain == '' && github.event.inputs.rs == '' && github.event.inputs.dump_review == ''
         run: python tools/audit_data.py
         env:
           PYTHONPATH: .
