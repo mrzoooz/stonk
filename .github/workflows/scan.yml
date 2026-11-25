@@ -143,30 +143,41 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
-      # deploy-pages asks the artifact API for the artifact about half a second
-      # after the upload returns, and that API is not read-your-writes: twice
-      # in two months it answered "no artifacts named github-pages" for a file
-      # that had just uploaded cleanly, failing a scan that had otherwise
-      # worked. Wait for the artifact to actually be visible before deploying.
-      - name: Wait for the Pages artifact to be visible
-        if: github.event.inputs.dry_run != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for i in $(seq 1 20); do
-            if gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
-                 --jq '.artifacts[].name' 2>/dev/null | grep -qx 'github-pages'; then
-              echo "artifact visible after ${i} attempt(s)"
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "artifact never became visible" >&2
-          exit 1
-      - id: deployment
-        if: github.event.inputs.dry_run != 'true'
-        uses: actions/deploy-pages@v4
+      # The deploy lives in its own job for one reason: the screen above takes
+      # 35 minutes, and a flaky deploy used to throw all of it away. Now a
+      # failed publish can be re-run on its own from the Actions page without
+      # rescanning, and the scan's own result stands either way.
 
+  publish:
+    needs: scan
+    if: github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.try1.outputs.page_url || steps.try2.outputs.page_url || steps.try3.outputs.page_url }}
+    steps:
+      # deploy-pages looks the artifact up through GitHub's artifact results
+      # service, which is not the REST endpoint this workflow can poll - so
+      # there is no check here that proves the deploy will find it. Three
+      # failures in two months have all been that lookup coming back empty
+      # for an artifact that uploaded cleanly seconds earlier. It cannot be
+      # prevented from here, only retried.
+      - id: try1
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - if: steps.try1.outcome == 'failure'
+        run: sleep 30
+      - id: try2
+        if: steps.try1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - if: steps.try1.outcome == 'failure' && steps.try2.outcome == 'failure'
+        run: sleep 60
+      - id: try3
+        if: steps.try1.outcome == 'failure' && steps.try2.outcome == 'failure'
+        uses: actions/deploy-pages@v4
