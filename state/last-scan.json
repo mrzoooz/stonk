@@ -1,29 +1,29 @@
 {
-  "generated_at": "2026-11-24T22:01:38+00:00",
-  "as_of": "2026-11-23",
+  "generated_at": "2026-11-25T06:11:21+00:00",
+  "as_of": "2026-11-24",
   "counts": {
     "ready": 0,
-    "watch": 30,
-    "stage2": 14,
+    "watch": 26,
+    "stage2": 16,
     "errors": 0,
     "price_steps_flagged": 26
   },
   "watch_reasons": {
-    "final contraction outside the tight range": 23,
-    "risk above ceiling": 22,
-    "no volume dry-up": 20,
-    "pivot already broken (missed entry)": 20,
+    "final contraction outside the tight range": 20,
+    "risk above ceiling": 19,
+    "no volume dry-up": 18,
+    "pivot already broken (missed entry)": 17,
     "reward:risk below minimum": 9,
     "too few contractions": 4,
     "first contraction too deep": 1
   },
   "contraction_counts": {
     "1": 4,
-    "2": 4,
+    "2": 3,
     "3": 7,
-    "4": 8,
-    "5": 5,
+    "4": 6,
+    "5": 4,
     "6": 2
   },
-  "elapsed_sec": 2118.6
+  "elapsed_sec": 2059.3
 }
