@@ -53,22 +53,21 @@ jobs:
         env:
           PYTHONPATH: .
 
+      # Uploaded as an artifact rather than pushed to a branch: this workflow
+      # is a read-only diagnostic and should not hold contents: write just to
+      # hand a file back.
       - name: Dump names for review
         if: github.event.inputs.dump_review != ''
         env:
-          GH_TOKEN: ${{ github.token }}
           PYTHONPATH: .
-        run: |
-          python tools/dump_for_review.py --top "${{ github.event.inputs.dump_review }}"
-          work=$(mktemp -d); cp state/review.json "$work/"
-          cd "$work"; git init -q
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add review.json
-          git commit -qm "Review dump $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git push -q --force \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
-            HEAD:refs/heads/review-dump
+        run: python tools/dump_for_review.py --top "${{ github.event.inputs.dump_review }}"
+      - name: Upload the review dump
+        if: github.event.inputs.dump_review != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-dump
+          path: state/review.json
+          retention-days: 3
 
       - name: Verify every base against the rules
         if: github.event.inputs.explain == '' && github.event.inputs.rs == '' && github.event.inputs.dump_review == ''
