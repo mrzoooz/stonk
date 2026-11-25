@@ -57,6 +57,7 @@ jobs:
         if: github.event.inputs.dump_review != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: .
         run: |
           python tools/dump_for_review.py --top "${{ github.event.inputs.dump_review }}"
           work=$(mktemp -d); cp state/review.json "$work/"
