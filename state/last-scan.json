@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-11-27T20:42:57+00:00",
+  "generated_at": "2026-11-28T05:27:26+00:00",
   "as_of": "2026-11-25",
   "counts": {
     "ready": 0,
     "watch": 37,
     "stage2": 6,
     "errors": 0,
-    "price_steps_flagged": 26
+    "price_steps_flagged": 27
   },
   "watch_reasons": {
     "final contraction outside the tight range": 37,
@@ -26,5 +26,5 @@
     "5": 6,
     "6": 3
   },
-  "elapsed_sec": 2104.4
+  "elapsed_sec": 2020.9
 }
